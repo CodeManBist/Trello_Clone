@@ -52,3 +52,38 @@ export async function getOrganizations(req: Request, res: Response) {
         return res.status(500).json({ message: 'Error fetching organizations' });
     }
 }
+
+export async function deleteOrganization(req: Request<{ organizationId: string }>, res: Response) {
+    const { organizationId } = req.params;
+
+    try {
+        const membership = await prisma.membership.findFirst({
+            where: {
+                userId: req.userId,
+                organizationId,
+            }
+        });
+
+        if(!membership) {
+            return res.status(404).json({
+                message: "Organization not found",
+            });
+        }
+
+        if(membership.role !== "ADMIN") {
+            return res.status(403).json({
+                message: "Only admins can delete the organization",
+            });
+        }
+
+        await prisma.organization.delete({
+            where: {
+                id: organizationId,
+            }
+        })
+    } catch (error: any) {
+        console.log(error);
+        
+        res.status(500).json({ message: 'Error deleting organization' });
+    }
+} 
