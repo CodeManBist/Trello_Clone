@@ -33,5 +33,8 @@ console.log("SIGNIN");
 console.log("Status:", signin.status);
 console.log("Content-Type:", signin.headers.get("content-type"));
 
-const signinData = await signin.text();
+const signinData = await signin.json() as {
+  token: string;
+};
+const token = signinData.token;
 console.log("Response:", signinData);
