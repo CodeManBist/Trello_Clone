@@ -8,7 +8,6 @@ const ROOMS: any = {
 
 server.on("connection", (socket) => {
     socket.on("message", (data) => {
-        console.log("SERVER GOT:", data.toString());
         let parsedData;
         try {
             parsedData = JSON.parse(data);
@@ -50,7 +49,6 @@ server.on("connection", (socket) => {
 
             if(userExists) {
                 users = users.filter(u => u.socket != socket); 
-                console.log("User left", userExists.userId, "from room", roomId);
                 ROOMS[roomId] = ROOMS[roomId].filter(u => u.socket != socket);
                 users.forEach(({ socket }) => {
                     socket.send(JSON.stringify({

@@ -1,10 +1,14 @@
 import express from 'express';
 import { prisma } from 'db/client';
+import authRoutes from './routes/auth.ts';
 
 const app = express();
 
-app.post("/signup",  (req, res) => {
-    
-})
+app.use(express.json());
 
-app.listen(3001);
+app.use(express.json());
+app.use('/api/auth', authRoutes);
+
+app.listen(3001, () => {
+    console.log('Backend running on http://localhost:3001');  
+});

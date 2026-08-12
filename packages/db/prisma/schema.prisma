@@ -12,8 +12,93 @@ datasource db {
   provider = "postgresql"
 }
 
+enum MembershipRole {
+  MEMBER
+  ADMIN
+}
+
 model User {
-  id String @id @default(uuid())
-  username String 
+  id       String @id @default(uuid())
+  username String
+  email    String @unique
   password String
+
+  memberships Membership[]
+  issues      IssuesMapping[]
+  comments    Comment[]
+}
+
+model Organization {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+
+  memberships Membership[]
+  boards      Board[]
+}
+
+model Membership {
+  id             String @id @default(uuid())
+  userId         String
+  organizationId String
+  role           MembershipRole
+
+  user         User         @relation(fields: [userId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+}
+
+model Board {
+  id             String @id @default(uuid())
+  title          String
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  sections     Section[]
+  issues       Issue[]
+}
+
+model Section {
+  id      String @id @default(uuid())
+  title   String
+  boardId String
+
+  board  Board   @relation(fields: [boardId], references: [id])
+  issues Issue[]
+}
+
+model Issue {
+  id          String @id @default(uuid())
+  title       String
+  description String?
+  boardId     String
+  sectionId   String
+
+  board   Board   @relation(fields: [boardId], references: [id])
+  section Section @relation(fields: [sectionId], references: [id])
+
+  assignees IssuesMapping[]
+  comments  Comment[]
+}
+
+model IssuesMapping {
+  id      String @id @default(uuid())
+  userId  String
+  issueId String
+
+  user  User  @relation(fields: [userId], references: [id])
+  issue Issue @relation(fields: [issueId], references: [id])
+
+  @@unique([userId, issueId])
+}
+
+model Comment {
+  id      String @id @default(uuid())
+  content String
+  userId  String
+  issueId String
+
+  user  User  @relation(fields: [userId], references: [id])
+  issue Issue @relation(fields: [issueId], references: [id])
 }
