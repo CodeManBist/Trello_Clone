@@ -1,104 +1,124 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+  // This is your Prisma schema file,
+  // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
+  // Get a free hosted Postgres database in seconds: `npx create-db`
 
-generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
-}
+  generator client {
+    provider = "prisma-client"
+    output   = "../generated/prisma"
+  }
 
-datasource db {
-  provider = "postgresql"
-}
+  datasource db {
+    provider = "postgresql"
+  }
 
-enum MembershipRole {
-  MEMBER
-  ADMIN
-}
+  enum MembershipRole {
+    MEMBER
+    ADMIN
+  }
 
-model User {
-  id       String @id @default(uuid())
-  username String
-  email    String @unique
-  password String
+  enum InvitationStatus {
+    PENDING
+    ACCEPTED
+  }
 
-  memberships Membership[]
-  issues      IssuesMapping[]
-  comments    Comment[]
-}
+  model User {
+    id       String @id @default(uuid())
+    username String
+    email    String @unique
+    password String
 
-model Organization {
-  id          String @id @default(uuid())
-  name        String @unique
-  description String?
+    memberships Membership[]
+    issues      IssuesMapping[]
+    comments    Comment[]
+    sentInvitations Invitation[]
+  }
 
-  memberships Membership[]
-  boards      Board[]
-}
+  model Organization {
+    id          String @id @default(uuid())
+    name        String @unique
+    description String?
 
-model Membership {
-  id             String @id @default(uuid())
-  userId         String
-  organizationId String
-  role           MembershipRole
+    memberships Membership[]
+    boards      Board[]
+    invitations  Invitation[]
+  }
 
-  user         User         @relation(fields: [userId], references: [id])
-  organization Organization @relation(fields: [organizationId], references: [id])
+  model Membership {
+    id             String @id @default(uuid())
+    userId         String
+    organizationId String
+    role           MembershipRole
 
-  @@unique([userId, organizationId])
-}
+    user         User         @relation(fields: [userId], references: [id])
+    organization Organization @relation(fields: [organizationId],references: [id],onDelete: Cascade)
 
-model Board {
-  id             String @id @default(uuid())
-  title          String
-  organizationId String
+    @@unique([userId, organizationId])
+  }
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  sections     Section[]
-  issues       Issue[]
-}
+  model Board {
+    id             String @id @default(uuid())
+    title          String
+    organizationId String
 
-model Section {
-  id      String @id @default(uuid())
-  title   String
-  boardId String
+    organization Organization @relation(fields: [organizationId], references: [id],onDelete: Cascade)
+    sections     Section[]
+    issues       Issue[]
+  }
 
-  board  Board   @relation(fields: [boardId], references: [id])
-  issues Issue[]
-}
+  model Section {
+    id      String @id @default(uuid())
+    title   String
+    boardId String
 
-model Issue {
-  id          String @id @default(uuid())
-  title       String
-  description String?
-  boardId     String
-  sectionId   String
+    board  Board   @relation(fields: [boardId], references: [id],onDelete: Cascade)
+    issues Issue[]
+  }
 
-  board   Board   @relation(fields: [boardId], references: [id])
-  section Section @relation(fields: [sectionId], references: [id])
+  model Issue {
+    id          String @id @default(uuid())
+    title       String
+    description String?
+    boardId     String
+    sectionId   String
 
-  assignees IssuesMapping[]
-  comments  Comment[]
-}
+    board   Board   @relation(fields: [boardId], references: [id],onDelete: Cascade)
+    section Section @relation(fields: [sectionId], references: [id],onDelete: Cascade)
 
-model IssuesMapping {
-  id      String @id @default(uuid())
-  userId  String
-  issueId String
+    assignees IssuesMapping[]
+    comments  Comment[]
+  }
 
-  user  User  @relation(fields: [userId], references: [id])
-  issue Issue @relation(fields: [issueId], references: [id])
+  model IssuesMapping {
+    id      String @id @default(uuid())
+    userId  String
+    issueId String
 
-  @@unique([userId, issueId])
-}
+    user  User  @relation(fields: [userId], references: [id])
+    issue Issue @relation(fields: [issueId], references: [id],onDelete: Cascade)
 
-model Comment {
-  id      String @id @default(uuid())
-  content String
-  userId  String
-  issueId String
+    @@unique([userId, issueId])
+  }
 
-  user  User  @relation(fields: [userId], references: [id])
-  issue Issue @relation(fields: [issueId], references: [id])
-}
+  model Comment {
+    id      String @id @default(uuid())
+    content String
+    userId  String
+    issueId String
+
+    user  User  @relation(fields: [userId], references: [id])
+    issue Issue @relation(fields: [issueId], references: [id],onDelete: Cascade)
+  }
+  model Invitation {
+    id             String           @id @default(uuid())
+    email          String
+    organizationId String
+    invitedById    String
+    token          String           @unique
+    status         InvitationStatus @default(PENDING)
+
+    organization Organization @relation(fields: [organizationId], references: [id],onDelete: Cascade)
+    invitedBy    User         @relation(fields: [invitedById], references: [id])
+
+    createdAt DateTime @default(now())
+  }
