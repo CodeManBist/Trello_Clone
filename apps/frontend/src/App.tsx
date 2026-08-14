@@ -1,66 +1,197 @@
-import { useEffect, useState } from "react";
-import { APITester } from "./APITester";
-import "./index.css";
-
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
-import { Route, Routes, BrowserRouter, useParams } from "react-router";
+import { useRef, useState } from "react";
 
 export function App() {
-  return (
-    <div className="app">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/board/:boardId" element={<Board />} />
-        </Routes>
-      </BrowserRouter>
-    </div>
-  );
-}
+  const socketRef = useRef<WebSocket | null>(null);
 
-function Board() {
-  const { boardId } = useParams();
-  const [users, setUsers] = useState([]);
+  const [token, setToken] = useState("");
+  const [boardId, setBoardId] = useState("");
+  const [status, setStatus] = useState("Disconnected");
+  const [userId, setUserId] = useState("");
+  const [users, setUsers] = useState<string[]>([]);
+  const [events, setEvents] = useState<string[]>([]);
 
-  useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:3002/board/${boardId}`);
-    ws.onmessage = (ev) => {
-      const data = JSON.parse(ev.data);
+  const addEvent = (message: string) => {
+    setEvents((prev) => [...prev, message]);
+  };
 
-      if(data.type === "initial_stage") {
-        setUsers(data.users);
-      }
+  const connect = () => {
+    if (!token) {
+      addEvent("Token is required");
+      return;
+    }
 
-      if(data.type === "join") {
-        setUsers(u => [...u, { id: data.userId }]);
-      }
+    const socket = new WebSocket(
+      `ws://localhost:3002?token=${token}`
+    );
 
-      if(data.type === "leave") {
-        setUsers(u => u.filter(x => x.id !== data.userId));
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      setStatus("Connected");
+      addEvent("WebSocket connected");
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      console.log("Received:", data);
+
+      if (data.type === "authenticated") {
+        setUserId(data.userId);
+        addEvent(`Authenticated: ${data.userId}`);
       }
 
       if (data.type === "you") {
-        console.log("My userId is", data.userId);
+        setUserId(data.userId);
+        addEvent(`Your user ID: ${data.userId}`);
       }
-    }
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
-        type: "join",
-        boardId: boardId
-      }))
-    }
+      if (data.type === "initial_stage") {
+        setUsers(data.users.map((user: { id: string }) => user.id));
+        addEvent("Received initial users");
+      }
 
-    return () => {
-      ws.close();
+      if (data.type === "join") {
+        setUsers((prev) => [...prev, data.userId]);
+        addEvent(`User joined: ${data.userId}`);
+      }
+
+      if (data.type === "leave") {
+        setUsers((prev) =>
+          prev.filter((id) => id !== data.userId)
+        );
+        addEvent(`User left: ${data.userId}`);
+      }
+
+      if (data.type === "error") {
+        addEvent(`Error: ${data.message}`);
+      }
     };
-  }, [boardId]);
 
-  return <div>
-    You are on board { boardId } 
+    socket.onclose = () => {
+      setStatus("Disconnected");
+      addEvent("WebSocket disconnected");
+    };
 
-    Currently active users - { JSON.stringify(users) }
-  </div>
+    socket.onerror = () => {
+      addEvent("WebSocket error");
+    };
+  };
+
+  const joinBoard = () => {
+    if (!socketRef.current) {
+      addEvent("Connect to WebSocket first");
+      return;
+    }
+
+    if (!boardId) {
+      addEvent("Board ID is required");
+      return;
+    }
+
+    socketRef.current.send(
+      JSON.stringify({
+        type: "join",
+        boardId,
+      })
+    );
+
+    addEvent(`Joining board: ${boardId}`);
+  };
+
+  return (
+    <div
+      style={{
+        maxWidth: "700px",
+        margin: "40px auto",
+        padding: "20px",
+        fontFamily: "Arial",
+      }}
+    >
+      <h1>WebSocket Test</h1>
+
+      <div>
+        <label>JWT Token</label>
+
+        <input
+          type="text"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          placeholder="Paste JWT token"
+          style={{
+            width: "100%",
+            padding: "10px",
+            margin: "8px 0 20px",
+          }}
+        />
+      </div>
+
+      <div>
+        <label>Board ID</label>
+
+        <input
+          type="text"
+          value={boardId}
+          onChange={(e) => setBoardId(e.target.value)}
+          placeholder="Enter board ID"
+          style={{
+            width: "100%",
+            padding: "10px",
+            margin: "8px 0 20px",
+          }}
+        />
+      </div>
+
+      <button onClick={connect}>
+        Connect
+      </button>
+
+      <button
+        onClick={joinBoard}
+        style={{ marginLeft: "10px" }}
+      >
+        Join Board
+      </button>
+
+      <hr />
+
+      <h3>Status</h3>
+      <p>{status}</p>
+
+      <h3>Current User</h3>
+      <p>{userId || "Not authenticated"}</p>
+
+      <h3>Users in Board</h3>
+
+      {users.length === 0 ? (
+        <p>No other users</p>
+      ) : (
+        <ul>
+          {users.map((id) => (
+            <li key={id}>{id}</li>
+          ))}
+        </ul>
+      )}
+
+      <h3>Events</h3>
+
+      <div
+        style={{
+          border: "1px solid #ccc",
+          padding: "10px",
+          minHeight: "150px",
+        }}
+      >
+        {events.length === 0 ? (
+          <p>No events yet</p>
+        ) : (
+          events.map((event, index) => (
+            <div key={index}>{event}</div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default App;
