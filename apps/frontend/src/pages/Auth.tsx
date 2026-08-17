@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircleIcon, CheckCircle2Icon, Loader2 } from "lucide-react";
 
 import { signup, signin } from "@/services/auth";
+import { getOrganizations } from "@/services/organizations"
 
 type AuthMode = "signin" | "signup";
 
@@ -53,6 +54,14 @@ export function Auth({ mode }: AuthProps) {
       // Store JWT
       localStorage.setItem("token", data.token);
 
+      const organizations = await getOrganizations();
+
+      if(organizations.length === 0) {
+        navigate("/create-organization");
+      } else {
+        navigate("/dashboard");
+      }
+
       setSuccess(
         isSignIn
           ? "Signed in successfully."
@@ -60,9 +69,6 @@ export function Auth({ mode }: AuthProps) {
       );
 
       console.log("Authenticated user:", data.user);
-
-      // Redirect after successful authentication
-      navigate("/dashboard");
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);

@@ -197,32 +197,92 @@
 // export default App;
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+
 import { Auth } from "@/pages/Auth";
 import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
+import Settings from "@/pages/Settings";
+import Board from "@/pages/Board";
+import Issue from "@/pages/Issue";
+import CreateOrganization from "@/pages/CreateOrganization";
+
+import { PublicRoute } from "@/components/auth/PublicRoute";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import OrganizationRequiredRoute from "@/components/auth/OrganizationRequiredRoute";
 
 const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={<LandingPage />}>
+
+        {/* =========================
+            Public Routes
+        ========================= */}
+
+        <Route path="/" element={<LandingPage />} />
+
+        <Route element={<PublicRoute />}>
+          <Route
+            path="/signin"
+            element={<Auth mode="signin" />}
+          />
+
+          <Route
+            path="/signup"
+            element={<Auth mode="signup" />}
+          />
         </Route>
-        <Route 
-          path="/signin" 
-          element={<Auth mode="signin" />} />
-        <Route 
-          path="/signup" 
-          element={<Auth mode="signup" />} />
-        <Route
-          path="/dashboard"
-          element={<Dashboard />}
-        >
+
+
+        {/* =========================
+            Protected Routes
+        ========================= */}
+
+        <Route element={<ProtectedRoute />}>
+
+          {/* 
+            Authenticated user can access this
+            even if they don't have an organization.
+          */}
+          <Route
+            path="/create-organization"
+            element={<CreateOrganization />}
+          />
+
+
+          {/* 
+            Authenticated user AND
+            must belong to at least one organization.
+          */}
+          <Route element={<OrganizationRequiredRoute />}>
+
+            <Route
+              path="/dashboard"
+              element={<Dashboard />}
+            />
+
+            <Route
+              path="/settings"
+              element={<Settings />}
+            />
+
+            <Route
+              path="/boards/:boardId"
+              element={<Board />}
+            />
+
+            <Route
+              path="/issues/:issueId"
+              element={<Issue />}
+            />
+
+          </Route>
+
         </Route>
+
       </Routes>
     </BrowserRouter>
-  )
-}
+  );
+};
 
-export default App
+export default App;
