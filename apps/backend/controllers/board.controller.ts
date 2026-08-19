@@ -35,7 +35,7 @@ export async function getBoards(req: Request<{ organizationId: string }>, res: R
 export async function createBoard(req: Request<{ organizationId: string }>, res: Response) {
     const { organizationId } = req.params;
 
-    const { title } = req.body;
+    const { title, description } = req.body;
 
     if(!title) {
         return res.status(400).json({ message: 'title is required' });
@@ -57,6 +57,7 @@ export async function createBoard(req: Request<{ organizationId: string }>, res:
         const board = await prisma.board.create({
             data: {
                 title,
+                description,
                 organizationId,
             }
         });

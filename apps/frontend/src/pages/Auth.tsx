@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { useAuth } from "@/context/AuthContext";
+
 import { Button } from "@/components/ui/button";
 import {
   Field,
@@ -10,11 +12,19 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircleIcon, CheckCircle2Icon, Loader2 } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+
+import {
+  AlertCircleIcon,
+  Loader2,
+} from "lucide-react";
 
 import { signup, signin } from "@/services/auth";
-import { getOrganizations } from "@/services/organizations"
+import { getOrganizations } from "@/services/organizations";
 
 type AuthMode = "signin" | "signup";
 
@@ -23,6 +33,7 @@ interface AuthProps {
 }
 
 export function Auth({ mode }: AuthProps) {
+  const { setUser } = useAuth();
   const navigate = useNavigate();
 
   const isSignIn = mode === "signin";
@@ -33,14 +44,14 @@ export function Auth({ mode }: AuthProps) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
 
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
       let data;
@@ -48,27 +59,28 @@ export function Auth({ mode }: AuthProps) {
       if (isSignIn) {
         data = await signin(email, password);
       } else {
-        data = await signup(username, email, password);
+        data = await signup(
+          username,
+          email,
+          password
+        );
       }
 
-      // Store JWT
+      // Store authentication token
       localStorage.setItem("token", data.token);
 
+      // Store authenticated user in AuthContext
+      setUser(data.user);
+
+      // Check user's organizations
       const organizations = await getOrganizations();
 
-      if(organizations.length === 0) {
+      if (organizations.length === 0) {
         navigate("/create-organization");
       } else {
         navigate("/dashboard");
       }
 
-      setSuccess(
-        isSignIn
-          ? "Signed in successfully."
-          : "Account created successfully."
-      );
-
-      console.log("Authenticated user:", data.user);
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
@@ -81,13 +93,15 @@ export function Auth({ mode }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <div className="w-full max-w-md rounded-xl border bg-background p-8 shadow-sm">
 
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold">
-            {isSignIn ? "Welcome back" : "Create an account"}
+            {isSignIn
+              ? "Welcome back"
+              : "Create an account"}
           </h1>
 
           <p className="mt-2 text-sm text-muted-foreground">
@@ -99,28 +113,20 @@ export function Auth({ mode }: AuthProps) {
 
         {/* Error */}
         {error && (
-          <Alert variant="destructive" className="mb-6">
+          <Alert
+            variant="destructive"
+            className="mb-6"
+          >
             <AlertCircleIcon />
 
             <AlertTitle>
-              {isSignIn ? "Sign in failed" : "Sign up failed"}
+              {isSignIn
+                ? "Sign in failed"
+                : "Sign up failed"}
             </AlertTitle>
 
             <AlertDescription>
               {error}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Success */}
-        {success && (
-          <Alert className="mb-6">
-            <CheckCircle2Icon />
-
-            <AlertTitle>Success</AlertTitle>
-
-            <AlertDescription>
-              {success}
             </AlertDescription>
           </Alert>
         )}
@@ -140,7 +146,9 @@ export function Auth({ mode }: AuthProps) {
                   type="text"
                   placeholder="Enter your name"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) =>
+                    setUsername(e.target.value)
+                  }
                   disabled={loading}
                   required
                 />
@@ -157,7 +165,9 @@ export function Auth({ mode }: AuthProps) {
                 type="email"
                 placeholder="Enter your email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
                 disabled={loading}
                 required
               />
@@ -177,7 +187,9 @@ export function Auth({ mode }: AuthProps) {
                 type="password"
                 placeholder="Enter your password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
                 disabled={loading}
                 required
               />
@@ -188,14 +200,16 @@ export function Auth({ mode }: AuthProps) {
               className="w-full"
               disabled={loading}
             >
-              {loading
-                ? <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Please wait...
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Please wait...
                 </>
-                : (
-                    "Sign In"
-                )}
+              ) : (
+                isSignIn
+                  ? "Sign In"
+                  : "Sign Up"
+              )}
             </Button>
 
           </FieldGroup>
@@ -203,12 +217,16 @@ export function Auth({ mode }: AuthProps) {
 
         {/* Bottom link */}
         <p className="mt-6 text-center text-sm text-muted-foreground">
+
           {isSignIn ? (
             <>
               Don't have an account?{" "}
+
               <button
                 type="button"
-                onClick={() => navigate("/signup")}
+                onClick={() =>
+                  navigate("/signup")
+                }
                 className="font-medium text-primary hover:underline"
               >
                 Sign Up
@@ -217,15 +235,19 @@ export function Auth({ mode }: AuthProps) {
           ) : (
             <>
               Already have an account?{" "}
+
               <button
                 type="button"
-                onClick={() => navigate("/signin")}
+                onClick={() =>
+                  navigate("/signin")
+                }
                 className="font-medium text-primary hover:underline"
               >
                 Sign In
               </button>
             </>
           )}
+
         </p>
 
       </div>

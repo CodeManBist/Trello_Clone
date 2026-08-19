@@ -198,6 +198,8 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+import { AuthProvider } from "@/context/AuthContext";
+
 import { Auth } from "@/pages/Auth";
 import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
@@ -212,76 +214,76 @@ import OrganizationRequiredRoute from "@/components/auth/OrganizationRequiredRou
 
 const App = () => {
   return (
-    <BrowserRouter>
-      <Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
 
-        {/* =========================
-            Public Routes
-        ========================= */}
-
-        <Route path="/" element={<LandingPage />} />
-
-        <Route element={<PublicRoute />}>
-          <Route
-            path="/signin"
-            element={<Auth mode="signin" />}
-          />
+          {/* =========================
+              Public
+          ========================= */}
 
           <Route
-            path="/signup"
-            element={<Auth mode="signup" />}
-          />
-        </Route>
-
-
-        {/* =========================
-            Protected Routes
-        ========================= */}
-
-        <Route element={<ProtectedRoute />}>
-
-          {/* 
-            Authenticated user can access this
-            even if they don't have an organization.
-          */}
-          <Route
-            path="/create-organization"
-            element={<CreateOrganization />}
+            path="/"
+            element={<LandingPage />}
           />
 
-
-          {/* 
-            Authenticated user AND
-            must belong to at least one organization.
-          */}
-          <Route element={<OrganizationRequiredRoute />}>
-
+          <Route element={<PublicRoute />}>
             <Route
-              path="/dashboard"
-              element={<Dashboard />}
+              path="/signin"
+              element={<Auth mode="signin" />}
             />
 
             <Route
-              path="/settings"
-              element={<Settings />}
+              path="/signup"
+              element={<Auth mode="signup" />}
+            />
+          </Route>
+
+
+          {/* =========================
+              Authenticated
+          ========================= */}
+
+          <Route element={<ProtectedRoute />}>
+
+            {/* User is authenticated,
+                organization is NOT required */}
+            <Route
+              path="/create-organization"
+              element={<CreateOrganization />}
             />
 
-            <Route
-              path="/boards/:boardId"
-              element={<Board />}
-            />
+            {/* User is authenticated AND
+                must have an organization */}
+            <Route element={<OrganizationRequiredRoute />}>
 
-            <Route
-              path="/issues/:issueId"
-              element={<Issue />}
-            />
+              <Route
+                path="/dashboard"
+                element={<Dashboard />}
+              />
+
+              <Route
+                path="/settings"
+                element={<Settings />}
+              />
+
+              <Route
+                path="/boards/:boardId"
+                element={<Board />}
+              />
+
+              <Route
+                path="/issues/:issueId"
+                element={<Issue />}
+              />
+
+            </Route>
 
           </Route>
 
-        </Route>
-
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 };
 
