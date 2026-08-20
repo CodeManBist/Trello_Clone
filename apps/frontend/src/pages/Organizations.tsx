@@ -1,12 +1,12 @@
 import AppLayout from '@/components/layout/AppLayout'
 import React from 'react'
 
-const Board = () => {
+const Organizations = () => {
   return (
     <AppLayout>
-      Board
+        Organizations
     </AppLayout>
   )
 }
 
-export default Board
+export default Organizations

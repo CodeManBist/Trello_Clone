@@ -1,10 +1,11 @@
+import AppLayout from '@/components/layout/AppLayout'
 import React from 'react'
 
 const Settings = () => {
   return (
-    <div>
+    <AppLayout>
       Settings
-    </div>
+    </AppLayout>
   )
 }
 

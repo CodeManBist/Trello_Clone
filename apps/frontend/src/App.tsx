@@ -211,6 +211,7 @@ import CreateOrganization from "@/pages/CreateOrganization";
 import { PublicRoute } from "@/components/auth/PublicRoute";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import OrganizationRequiredRoute from "@/components/auth/OrganizationRequiredRoute";
+import Organizations from "./pages/Organizations";
 
 const App = () => {
   return (
@@ -260,6 +261,11 @@ const App = () => {
               <Route
                 path="/dashboard"
                 element={<Dashboard />}
+              />
+
+              <Route
+                path="/organizations"
+                element={<Organizations />}
               />
 
               <Route
