@@ -39,8 +39,11 @@ import {
 
 import CreateBoardDialog from "@/components/dashboard/CreateBoardDialog";
 
+import { useNavigate } from "react-router-dom";
+
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [organizations, setOrganizations] =
     useState<Organization[]>([]);
@@ -302,6 +305,9 @@ const Dashboard = () => {
                   <Card
                     key={board.id}
                     className="cursor-pointer transition-colors hover:bg-muted/50"
+                    onClick={() => {
+                      navigate(`/boards/${board.id}`);
+                    }}
                   >
                     <CardHeader>
                       <FolderKanban className="mb-2 h-5 w-5" />

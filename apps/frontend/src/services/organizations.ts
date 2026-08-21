@@ -12,6 +12,18 @@ export type OrganizationMembership = {
   organization: Organization;
 };
 
+export type OrganizationMember = {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: "ADMIN" | "MEMBER";
+  user: {
+    id: string;
+    username: string;
+    email: string;
+  };
+};
+
 export function getOrganizations() {
   return apiRequest<OrganizationMembership[]>("/organizations");
 }
@@ -44,7 +56,30 @@ export function updateOrganization(
 }
 
 export function deleteOrganization(id: string) {
-  return apiRequest<{ message: string }>(`/organizations/${id}`, {
-    method: "DELETE",
-  });
+  return apiRequest<{ message: string }>(
+    `/organizations/${id}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+export function getOrganizationMembers(
+  organizationId: string
+) {
+  return apiRequest<OrganizationMember[]>(
+    `/organizations/${organizationId}/members`
+  );
+}
+
+export function removeOrganizationMember(
+  organizationId: string,
+  userId: string
+) {
+  return apiRequest<{ message: string }>(
+    `/organizations/${organizationId}/members/${userId}`,
+    {
+      method: "DELETE",
+    }
+  );
 }

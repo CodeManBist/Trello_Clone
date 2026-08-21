@@ -212,6 +212,7 @@ import { PublicRoute } from "@/components/auth/PublicRoute";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import OrganizationRequiredRoute from "@/components/auth/OrganizationRequiredRoute";
 import Organizations from "./pages/Organizations";
+import Invitations from "./pages/Invitations";
 
 const App = () => {
   return (
@@ -246,6 +247,10 @@ const App = () => {
           ========================= */}
 
           <Route element={<ProtectedRoute />}>
+          <Route
+              path="/invitations"
+              element={<Invitations />}
+            />
 
             {/* User is authenticated,
                 organization is NOT required */}

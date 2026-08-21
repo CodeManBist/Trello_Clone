@@ -5,6 +5,7 @@ import {
   Building2,
   LogOut,
   ChevronsUpDown,
+  Mail,
 } from "lucide-react";
 
 import {
@@ -40,6 +41,11 @@ const navigation = [
     title: "Organizations",
     url: "/organizations",
     icon: Building2,
+  },
+  {
+    title: "Invitations",
+    url: "/invitations",
+    icon: Mail,
   },
   {
     title: "Settings",
