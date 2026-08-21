@@ -16,6 +16,7 @@ import {
   FolderKanban,
   Plus,
   Users,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -41,23 +42,36 @@ import CreateBoardDialog from "@/components/dashboard/CreateBoardDialog";
 const Dashboard = () => {
   const { user } = useAuth();
 
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizations, setOrganizations] =
+    useState<Organization[]>([]);
+
   const [selectedOrganization, setSelectedOrganization] =
     useState<Organization | null>(null);
 
+  const [organizationsLoading, setOrganizationsLoading] =
+    useState(true);
+
   const [boards, setBoards] = useState<Board[]>([]);
-  const [boardsLoading, setBoardsLoading] = useState(false);
 
-  const [createBoardOpen, setCreateBoardOpen] = useState(false);
+  const [boardsLoading, setBoardsLoading] =
+    useState(false);
 
+  const [createBoardOpen, setCreateBoardOpen] =
+    useState(false);
+
+  // --------------------------------------------------
   // Fetch organizations
+  // --------------------------------------------------
+
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
+        setOrganizationsLoading(true);
+
         const data = await getOrganizations();
 
         // API returns OrganizationMembership[]
-        // Dashboard only needs the organization objects.
+        // Dashboard needs only the organization objects.
         const organizationList = data.map(
           (membership) => membership.organization
         );
@@ -78,16 +92,22 @@ const Dashboard = () => {
 
         setOrganizations([]);
         setSelectedOrganization(null);
+      } finally {
+        setOrganizationsLoading(false);
       }
     };
 
     fetchOrganizations();
   }, []);
 
-  // Fetch boards whenever selected organization changes
+  // --------------------------------------------------
+  // Fetch boards whenever organization changes
+  // --------------------------------------------------
+
   useEffect(() => {
     if (!selectedOrganization) {
       setBoards([]);
+      setBoardsLoading(false);
       return;
     }
 
@@ -95,7 +115,8 @@ const Dashboard = () => {
       try {
         setBoardsLoading(true);
 
-        // Clear boards from previous organization
+        // Prevent boards from the previous organization
+        // from being displayed while loading.
         setBoards([]);
 
         const data = await getBoards(
@@ -118,18 +139,28 @@ const Dashboard = () => {
     fetchBoards();
   }, [selectedOrganization]);
 
-  // Called after successfully creating a board
+  // --------------------------------------------------
+  // Board created successfully
+  // --------------------------------------------------
+
   const handleBoardCreated = (board: Board) => {
     setBoards((prev) => [...prev, board]);
 
     setCreateBoardOpen(false);
   };
 
+  // --------------------------------------------------
+  // Render
+  // --------------------------------------------------
+
   return (
     <AppLayout>
       <div className="space-y-6">
 
+        {/* -------------------------------------------- */}
         {/* Page heading */}
+        {/* -------------------------------------------- */}
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -143,7 +174,9 @@ const Dashboard = () => {
 
           {selectedOrganization && (
             <Button
-              onClick={() => setCreateBoardOpen(true)}
+              onClick={() =>
+                setCreateBoardOpen(true)
+              }
             >
               <Plus className="mr-2 h-4 w-4" />
               New Board
@@ -151,7 +184,10 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* -------------------------------------------- */}
         {/* Organization */}
+        {/* -------------------------------------------- */}
+
         <Card>
           <CardHeader>
             <CardTitle>
@@ -164,11 +200,30 @@ const Dashboard = () => {
           </CardHeader>
 
           <CardContent>
-            {organizations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                You are not part of any organization.
-              </p>
+
+            {/* Organization loading */}
+            {organizationsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+
+                <span>
+                  Loading organizations...
+                </span>
+              </div>
+            ) : organizations.length === 0 ? (
+              /* No organizations */
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  You are not part of any organization.
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Create or join an organization to start
+                  managing boards.
+                </p>
+              </div>
             ) : (
+              /* Organization dropdown */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
@@ -185,11 +240,11 @@ const Dashboard = () => {
                       (organization) => (
                         <DropdownMenuItem
                           key={organization.id}
-                          onClick={() =>
+                          onClick={() => {
                             setSelectedOrganization(
                               organization
-                            )
-                          }
+                            );
+                          }}
                         >
                           {organization.name}
                         </DropdownMenuItem>
@@ -199,13 +254,18 @@ const Dashboard = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
           </CardContent>
         </Card>
 
+        {/* -------------------------------------------- */}
         {/* Boards */}
+        {/* -------------------------------------------- */}
+
         {selectedOrganization && (
           <div className="space-y-4">
 
+            {/* Boards heading */}
             <div>
               <h2 className="text-lg font-semibold">
                 Boards
@@ -217,15 +277,27 @@ const Dashboard = () => {
               </p>
             </div>
 
-            {/* Loading */}
+            {/* ---------------------------------------- */}
+            {/* Boards loading */}
+            {/* ---------------------------------------- */}
+
             {boardsLoading ? (
-              <p className="text-sm text-muted-foreground">
-                Loading boards...
-              </p>
+              <div className="flex min-h-[180px] items-center justify-center">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+
+                  <span>
+                    Loading boards...
+                  </span>
+                </div>
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
+                {/* ------------------------------------ */}
                 {/* Existing boards */}
+                {/* ------------------------------------ */}
+
                 {boards.map((board) => (
                   <Card
                     key={board.id}
@@ -246,7 +318,33 @@ const Dashboard = () => {
                   </Card>
                 ))}
 
-                {/* Create board */}
+                {/* ------------------------------------ */}
+                {/* No boards */}
+                {/* ------------------------------------ */}
+
+                {boards.length === 0 && (
+                  <div className="col-span-full">
+                    <Card className="border-dashed">
+                      <CardContent className="flex min-h-[180px] flex-col items-center justify-center text-center">
+                        <FolderKanban className="mb-3 h-6 w-6 text-muted-foreground" />
+
+                        <p className="font-medium">
+                          No boards yet
+                        </p>
+
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Create your first board for this
+                          organization.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* ------------------------------------ */}
+                {/* Create board card */}
+                {/* ------------------------------------ */}
+
                 <Card
                   className="cursor-pointer border-dashed transition-colors hover:bg-muted/50"
                   onClick={() =>
@@ -271,7 +369,10 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* -------------------------------------------- */}
         {/* Create Board Dialog */}
+        {/* -------------------------------------------- */}
+
         {selectedOrganization && (
           <CreateBoardDialog
             open={createBoardOpen}
