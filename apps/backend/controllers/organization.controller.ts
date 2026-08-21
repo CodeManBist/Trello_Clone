@@ -80,7 +80,9 @@ export async function deleteOrganization(req: Request<{ organizationId: string }
             where: {
                 id: organizationId,
             }
-        })
+        });
+
+        return res.status(200).json({ message: 'Organization deleted successfully' });
     } catch (error: any) {
         console.log(error);
         
@@ -190,6 +192,65 @@ export async function getOrganizationMembers(
   
       return res.status(500).json({
         message: "Error removing member",
+      });
+    }
+  }
+
+  export async function updateOrganization(
+    req: Request<{ organizationId: string }>,
+    res: Response
+  ) {
+    const { organizationId } = req.params;
+    const { name, description } = req.body;
+  
+    if (!name) {
+      return res.status(400).json({
+        message: "Organization name is required",
+      });
+    }
+  
+    try {
+      const membership = await prisma.membership.findFirst({
+        where: {
+          userId: req.userId,
+          organizationId,
+        },
+      });
+  
+      if (!membership) {
+        return res.status(404).json({
+          message: "Organization not found",
+        });
+      }
+  
+      if (membership.role !== "ADMIN") {
+        return res.status(403).json({
+          message: "Only admins can update the organization",
+        });
+      }
+  
+      const organization = await prisma.organization.update({
+        where: {
+          id: organizationId,
+        },
+        data: {
+          name,
+          description,
+        },
+      });
+  
+      return res.status(200).json(organization);
+    } catch (error: any) {
+      if (error.code === "P2002") {
+        return res.status(409).json({
+          message: "Organization name must be unique",
+        });
+      }
+  
+      console.error(error);
+  
+      return res.status(500).json({
+        message: "Error updating organization",
       });
     }
   }

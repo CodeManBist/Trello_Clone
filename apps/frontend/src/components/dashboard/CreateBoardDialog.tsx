@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button";
@@ -22,16 +21,18 @@ import {
 } from "@/services/boards";
 
 interface CreateBoardDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   organizationId: string;
   onBoardCreated: (board: Board) => void;
 }
 
 const CreateBoardDialog = ({
+  open,
+  onOpenChange,
   organizationId,
   onBoardCreated,
 }: CreateBoardDialogProps) => {
-  const [open, setOpen] = useState(false);
-
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -64,11 +65,11 @@ const CreateBoardDialog = ({
         description.trim()
       );
 
-      // Give the newly created board to Dashboard
+      // Add the newly created board to Dashboard
       onBoardCreated(board);
 
       resetForm();
-      setOpen(false);
+      onOpenChange(false);
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
@@ -81,11 +82,11 @@ const CreateBoardDialog = ({
   };
 
   const handleOpenChange = (value: boolean) => {
-    setOpen(value);
-
-    if (!value) {
+    if (!value && !loading) {
       resetForm();
     }
+
+    onOpenChange(value);
   };
 
   return (
@@ -93,15 +94,7 @@ const CreateBoardDialog = ({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Board
-        </Button>
-      </DialogTrigger>
-
       <DialogContent className="sm:max-w-[500px]">
-
         <DialogHeader>
           <DialogTitle>
             Create a new board
@@ -157,14 +150,13 @@ const CreateBoardDialog = ({
                 {error}
               </p>
             )}
-
           </div>
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancel
@@ -188,7 +180,6 @@ const CreateBoardDialog = ({
             </Button>
           </DialogFooter>
         </form>
-
       </DialogContent>
     </Dialog>
   );

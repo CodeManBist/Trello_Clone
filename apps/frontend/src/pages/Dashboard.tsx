@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-
+import { useEffect, useState } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import { useAuth } from "@/context/AuthContext";
 
@@ -17,8 +16,15 @@ import {
   FolderKanban,
   Plus,
   Users,
-  Loader2,
 } from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import {
   getOrganizations,
@@ -30,74 +36,55 @@ import {
   type Board,
 } from "@/services/boards";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-import BoardCard from "@/components/dashboard/BoardCard";
 import CreateBoardDialog from "@/components/dashboard/CreateBoardDialog";
 
 const Dashboard = () => {
   const { user } = useAuth();
 
-  const [organizations, setOrganizations] =
-    useState<Organization[]>([]);
-
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrganization, setSelectedOrganization] =
     useState<Organization | null>(null);
 
-  const [boards, setBoards] =
-    useState<Board[]>([]);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [boardsLoading, setBoardsLoading] = useState(false);
 
-  const [boardsLoading, setBoardsLoading] =
-    useState<boolean>(false);
+  const [createBoardOpen, setCreateBoardOpen] = useState(false);
 
-  const [organizationsLoading, setOrganizationsLoading] =
-    useState<boolean>(true);
-
-  // =========================
   // Fetch organizations
-  // =========================
-
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
-        setOrganizationsLoading(true);
-
         const data = await getOrganizations();
 
-        setOrganizations(data);
-
-        console.log(
-          "Fetched organizations:",
-          data
+        // API returns OrganizationMembership[]
+        // Dashboard only needs the organization objects.
+        const organizationList = data.map(
+          (membership) => membership.organization
         );
 
+        setOrganizations(organizationList);
+
         // Automatically select the first organization
-        if (data.length > 0) {
-          setSelectedOrganization(data[0]);
+        if (organizationList.length > 0) {
+          setSelectedOrganization(organizationList[0]);
+        } else {
+          setSelectedOrganization(null);
         }
       } catch (error) {
         console.error(
           "Error fetching organizations:",
           error
         );
-      } finally {
-        setOrganizationsLoading(false);
+
+        setOrganizations([]);
+        setSelectedOrganization(null);
       }
     };
 
     fetchOrganizations();
   }, []);
 
-  // =========================
-  // Fetch boards
-  // =========================
-
+  // Fetch boards whenever selected organization changes
   useEffect(() => {
     if (!selectedOrganization) {
       setBoards([]);
@@ -108,25 +95,14 @@ const Dashboard = () => {
       try {
         setBoardsLoading(true);
 
-        const organizationId =
-          selectedOrganization.organization.id;
-
-        console.log(
-          "Fetching boards for organization:",
-          organizationId
-        );
+        // Clear boards from previous organization
+        setBoards([]);
 
         const data = await getBoards(
-          organizationId
-        );
-
-        console.log(
-          "Fetched boards:",
-          data
+          selectedOrganization.id
         );
 
         setBoards(data);
-        console.log(data);
       } catch (error) {
         console.error(
           "Error fetching boards:",
@@ -142,16 +118,19 @@ const Dashboard = () => {
     fetchBoards();
   }, [selectedOrganization]);
 
+  // Called after successfully creating a board
+  const handleBoardCreated = (board: Board) => {
+    setBoards((prev) => [...prev, board]);
+
+    setCreateBoardOpen(false);
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
 
-        {/* =========================
-            Page heading
-        ========================= */}
-
+        {/* Page heading */}
         <div className="flex items-center justify-between">
-
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
               Dashboard
@@ -162,29 +141,17 @@ const Dashboard = () => {
             </p>
           </div>
 
-          {/* New Board button */}
-
           {selectedOrganization && (
-            <CreateBoardDialog
-              organizationId={
-                selectedOrganization.organization.id
-              }
-              onBoardCreated={(board) => {
-                setBoards((prev) => [
-                  ...prev,
-                  board,
-                ]);
-              }}
-            />
+            <Button
+              onClick={() => setCreateBoardOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New Board
+            </Button>
           )}
-
         </div>
 
-
-        {/* =========================
-            Organization
-        ========================= */}
-
+        {/* Organization */}
         <Card>
           <CardHeader>
             <CardTitle>
@@ -197,198 +164,122 @@ const Dashboard = () => {
           </CardHeader>
 
           <CardContent>
-
-            {organizationsLoading ? (
-
-              <Button
-                variant="outline"
-                disabled
-                className="w-full justify-start sm:w-[300px]"
-              >
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-
-                Loading organizations...
-              </Button>
-
-            ) : organizations.length === 0 ? (
-
+            {organizations.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No organizations found.
+                You are not part of any organization.
               </p>
-
             ) : (
-
               <DropdownMenu>
-
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start sm:w-[300px]"
-                  >
+                  <Button variant="outline">
                     <Users className="mr-2 h-4 w-4" />
 
-                    {selectedOrganization
-                      ?.organization.name ??
+                    {selectedOrganization?.name ??
                       "Select Organization"}
                   </Button>
                 </DropdownMenuTrigger>
 
-                <DropdownMenuContent
-                  align="start"
-                  className="w-[300px]"
-                >
+                <DropdownMenuContent>
                   <DropdownMenuGroup>
-
                     {organizations.map(
-                      (item) => (
+                      (organization) => (
                         <DropdownMenuItem
-                          key={item.id}
+                          key={organization.id}
                           onClick={() =>
                             setSelectedOrganization(
-                              item
+                              organization
                             )
                           }
                         >
-                          <Users className="mr-2 h-4 w-4" />
-
-                          {item.organization.name}
+                          {organization.name}
                         </DropdownMenuItem>
                       )
                     )}
-
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
-
               </DropdownMenu>
-
             )}
-
           </CardContent>
         </Card>
 
-
-        {/* =========================
-            Boards
-        ========================= */}
-
-        <div className="space-y-4">
-
-          <div className="flex items-center justify-between">
+        {/* Boards */}
+        {selectedOrganization && (
+          <div className="space-y-4">
 
             <div>
               <h2 className="text-lg font-semibold">
-                Your Boards
+                Boards
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                {selectedOrganization
-                  ? `Boards in ${selectedOrganization.organization.name}`
-                  : "Select an organization to view boards."}
+                Boards in{" "}
+                {selectedOrganization.name}.
               </p>
             </div>
 
-          </div>
+            {/* Loading */}
+            {boardsLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading boards...
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
+                {/* Existing boards */}
+                {boards.map((board) => (
+                  <Card
+                    key={board.id}
+                    className="cursor-pointer transition-colors hover:bg-muted/50"
+                  >
+                    <CardHeader>
+                      <FolderKanban className="mb-2 h-5 w-5" />
 
-          {/* =========================
-              Board loading
-          ========================= */}
+                      <CardTitle>
+                        {board.title}
+                      </CardTitle>
 
-          {boardsLoading ? (
+                      <CardDescription>
+                        {board.description ||
+                          "No description"}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                ))}
 
-            <div className="flex min-h-[180px] items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-
-          ) : boards.length === 0 ? (
-
-            /* =========================
-               Empty state
-            ========================= */
-
-            <Card className="border-dashed">
-
-              <CardContent className="flex min-h-[180px] flex-col items-center justify-center">
-
-                <FolderKanban className="mb-3 h-6 w-6" />
-
-                <p className="font-medium">
-                  No boards yet
-                </p>
-
-                <p className="mt-1 text-center text-sm text-muted-foreground">
-                  Create your first board for this organization.
-                </p>
-
-                {selectedOrganization && (
-                  <div className="mt-4">
-                    <CreateBoardDialog
-                      organizationId={
-                        selectedOrganization.organization.id
-                      }
-                      onBoardCreated={(board) => {
-                        setBoards((prev) => [
-                          ...prev,
-                          board,
-                        ]);
-                      }}
-                    />
-                  </div>
-                )}
-
-              </CardContent>
-
-            </Card>
-
-          ) : (
-
-            /* =========================
-               Board cards
-            ========================= */
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
-              {boards.map((board) => (
-                <BoardCard
-                  key={board.id}
-                  board={board}
-                />
-              ))}
-
-
-              {/* Create another board */}
-
-              {selectedOrganization && (
-                <Card className="border-dashed transition-colors hover:bg-muted/50">
-
+                {/* Create board */}
+                <Card
+                  className="cursor-pointer border-dashed transition-colors hover:bg-muted/50"
+                  onClick={() =>
+                    setCreateBoardOpen(true)
+                  }
+                >
                   <CardContent className="flex min-h-[180px] flex-col items-center justify-center">
+                    <Plus className="mb-3 h-6 w-6" />
 
-                    <CreateBoardDialog
-                      organizationId={
-                        selectedOrganization.organization.id
-                      }
-                      onBoardCreated={(board) => {
-                        setBoards((prev) => [
-                          ...prev,
-                          board,
-                        ]);
-                      }}
-                    />
-
-                    <p className="mt-3 text-center text-sm text-muted-foreground">
-                      Start organizing your team's work.
+                    <p className="font-medium">
+                      Create a new board
                     </p>
 
+                    <p className="mt-1 text-center text-sm text-muted-foreground">
+                      Start organizing your team's work.
+                    </p>
                   </CardContent>
-
                 </Card>
-              )}
 
-            </div>
+              </div>
+            )}
+          </div>
+        )}
 
-          )}
-
-        </div>
+        {/* Create Board Dialog */}
+        {selectedOrganization && (
+          <CreateBoardDialog
+            open={createBoardOpen}
+            onOpenChange={setCreateBoardOpen}
+            organizationId={selectedOrganization.id}
+            onBoardCreated={handleBoardCreated}
+          />
+        )}
 
       </div>
     </AppLayout>
