@@ -75,7 +75,7 @@ export function AppSidebar() {
       {/* Logo */}
       <SidebarHeader className="h-14 justify-center border-b border-neutral-200 px-3">
         <Link
-          to="/dashboard"
+          to="/"
           className="flex items-center gap-2.5"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-900 text-white">

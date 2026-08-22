@@ -32,42 +32,81 @@ export async function getBoards(req: Request<{ organizationId: string }>, res: R
     }
 }
 
-export async function createBoard(req: Request<{ organizationId: string }>, res: Response) {
+export async function createBoard(
+    req: Request<{ organizationId: string }>,
+    res: Response
+  ) {
     const { organizationId } = req.params;
-
     const { title, description } = req.body;
-
-    if(!title) {
-        return res.status(400).json({ message: 'title is required' });
+  
+    if (!title) {
+      return res.status(400).json({
+        message: "title is required",
+      });
     }
-
+  
     try {
-        const membership = await prisma.membership.findFirst({
-            where: {
-                userId: req.userId,
-                organizationId,
-                role: 'ADMIN',
-            },
-        }); 
-
-        if(!membership) {
-            return res.status(403).json({ message: 'You are not authorized to create a board in this organization' });
-        }
-
-        const board = await prisma.board.create({
-            data: {
-                title,
-                description,
-                organizationId,
-            }
+      const membership = await prisma.membership.findFirst({
+        where: {
+          userId: req.userId,
+          organizationId,
+          role: "ADMIN",
+        },
+      });
+  
+      if (!membership) {
+        return res.status(403).json({
+          message:
+            "You are not authorized to create a board in this organization",
         });
-
-        return res.status(201).json(board);
+      }
+  
+      // Create board
+      const board = await prisma.board.create({
+        data: {
+          title,
+          description,
+          organizationId,
+        },
+      });
+  
+      // Create default sections
+      await prisma.section.createMany({
+        data: [
+          {
+            title: "Todo",
+            boardId: board.id,
+          },
+          {
+            title: "In Progress",
+            boardId: board.id,
+          },
+          {
+            title: "Done",
+            boardId: board.id,
+          },
+        ],
+      });
+  
+      // Return board with sections
+      const boardWithSections = await prisma.board.findUnique({
+        where: {
+          id: board.id,
+        },
+        include: {
+          sections: true,
+        },
+      });
+  
+      return res.status(201).json(boardWithSections);
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'error creating board' });
+      console.error(error);
+  
+      return res.status(500).json({
+        message: "error creating board",
+      });
     }
-}
+  }
 
 export async function updateBoard(req: Request<{ boardId: string }>, res: Response) {
     const { boardId } = req.params;
