@@ -9,6 +9,7 @@ import boardRoutes from './routes/board.routes.ts';
 import sectionRoutes from "./routes/section.routes";
 import issueRoutes from "./routes/issue.routes";
 import commentRoutes from "./routes/comment.routes";
+import chatRoutes from "./routes/chat.routes.ts";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api", boardRoutes);
 app.use("/api", sectionRoutes);
 app.use("/api", issueRoutes);
 app.use("/api", commentRoutes);
+app.use("/api", chatRoutes);
 
 app.listen(3001, () => {
     console.log('Backend running on http://localhost:3001');  

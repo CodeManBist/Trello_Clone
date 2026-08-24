@@ -19,529 +19,766 @@ type Rooms = Record<string, RoomUser[]>;
 
 const ROOMS: Rooms = {};
 
-/*
-|--------------------------------------------------------------------------
-| Helpers
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+ * HELPERS
+ * ========================================================= */
 
-const send = (
-  socket: WebSocket,
-  message: unknown
-) => {
-  if (socket.readyState === WebSocket.OPEN) {
+function send(socket: WebSocket, message: unknown) {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  try {
     socket.send(JSON.stringify(message));
+  } catch (error) {
+    console.error("WS SEND ERROR:", error);
   }
-};
+}
 
-const broadcast = (
+function broadcast(
   users: RoomUser[],
-  message: unknown,
-  exceptSocket?: WebSocket
-) => {
+  message: unknown
+) {
+  const payload = JSON.stringify(message);
+
   for (const roomUser of users) {
-    if (roomUser.socket === exceptSocket) {
-      continue;
+    if (roomUser.socket.readyState === WebSocket.OPEN) {
+      try {
+        roomUser.socket.send(payload);
+      } catch (error) {
+        console.error(
+          "WS BROADCAST ERROR:",
+          error
+        );
+      }
     }
-
-    send(roomUser.socket, message);
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| WebSocket Connection
-|--------------------------------------------------------------------------
-*/
+function removeSocketFromRoom(
+  boardId: string,
+  socket: WebSocket
+) {
+  const room = ROOMS[boardId];
 
-server.on("connection", async (socket, request) => {
-  console.log("========== WS CONNECTION ==========");
+  if (!room) {
+    return;
+  }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Get JWT from query string
-  |--------------------------------------------------------------------------
-  */
-
-  const url = new URL(
-    request.url || "",
-    `http://${request.headers.host}`
+  ROOMS[boardId] = room.filter(
+    (roomUser) => roomUser.socket !== socket
   );
 
-  const token = url.searchParams.get("token");
+  if (ROOMS[boardId].length === 0) {
+    delete ROOMS[boardId];
+  }
+}
 
-  if (!token) {
-    console.log("WS ERROR: No token");
+/* =========================================================
+ * CONNECTION
+ * ========================================================= */
 
-    socket.close(
-      1008,
-      "Authentication required"
+server.on(
+  "connection",
+  async (socket, request) => {
+    console.log(
+      "========== WS CONNECTION =========="
     );
 
-    return;
-  }
+    let databaseUser:
+      | {
+          id: string;
+          username: string;
+        }
+      | null = null;
 
-  /*
-  |--------------------------------------------------------------------------
-  | Authenticate JWT
-  |--------------------------------------------------------------------------
-  */
+    let joinedBoardId: string | null = null;
 
-  let userId: string;
+    /* =====================================================
+     * AUTH TOKEN
+     * ===================================================== */
 
-  try {
-    const decoded = jwt.verify(
-      token,
-      JWT_SECRET
-    ) as {
-      userId: string;
-    };
+    const url = new URL(
+      request.url || "",
+      `http://${request.headers.host}`
+    );
 
-    if (!decoded.userId) {
-      throw new Error("JWT does not contain userId");
+    const token = url.searchParams.get("token");
+
+    if (!token) {
+      console.error("WS ERROR: No token");
+
+      socket.close(
+        1008,
+        "Authentication required"
+      );
+
+      return;
     }
 
-    userId = decoded.userId;
+    /* =====================================================
+     * JWT AUTHENTICATION
+     * ===================================================== */
 
-    console.log(
-      "JWT USER ID:",
-      userId
-    );
-  } catch (error) {
-    console.error(
-      "Invalid WebSocket token:",
-      error
-    );
+    let userId: string;
 
-    socket.close(
-      1008,
-      "Invalid token"
-    );
-
-    return;
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Get user from database
-  |--------------------------------------------------------------------------
-  */
-
-  let databaseUser;
-
-  try {
-    databaseUser =
-      await prisma.user.findUnique({
-        where: {
-          id: userId,
-        },
-        select: {
-          id: true,
-          username: true,
-        },
-      });
-
-    console.log(
-      "DATABASE USER:",
-      databaseUser
-    );
-  } catch (error) {
-    console.error(
-      "Error fetching WebSocket user:",
-      error
-    );
-
-    socket.close(
-      1011,
-      "Internal server error"
-    );
-
-    return;
-  }
-
-  if (!databaseUser) {
-    console.log(
-      "WS ERROR: User not found"
-    );
-
-    socket.close(
-      1008,
-      "User not found"
-    );
-
-    return;
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Tell frontend authentication succeeded
-  |--------------------------------------------------------------------------
-  */
-
-  send(socket, {
-    type: "authenticated",
-    userId: databaseUser.id,
-  });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Handle incoming messages
-  |--------------------------------------------------------------------------
-  */
-
-  socket.on("message", async (data) => {
     try {
-      /*
-      |--------------------------------------------------------------------------
-      | Parse JSON
-      |--------------------------------------------------------------------------
-      */
+      const decoded = jwt.verify(
+        token,
+        JWT_SECRET
+      ) as {
+        userId?: string;
+      };
 
-      let parsedData: any;
-
-      try {
-        parsedData = JSON.parse(
-          data.toString()
+      if (!decoded.userId) {
+        throw new Error(
+          "JWT does not contain userId"
         );
-      } catch {
-        send(socket, {
-          type: "error",
-          message: "Invalid JSON",
-        });
-
-        return;
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | JOIN BOARD
-      |--------------------------------------------------------------------------
-      */
+      userId = decoded.userId;
 
-      if (parsedData.type === "join") {
-        const boardId = parsedData.boardId;
-
-        if (!boardId) {
-          send(socket, {
-            type: "error",
-            message: "Board ID is required",
-          });
-
-          return;
-        }
-
-        console.log(
-          `USER ${databaseUser.username} JOINING BOARD ${boardId}`
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Check board
-        |--------------------------------------------------------------------------
-        */
-
-        const board =
-          await prisma.board.findUnique({
-            where: {
-              id: boardId,
-            },
-          });
-
-        if (!board) {
-          send(socket, {
-            type: "error",
-            message: "Board not found",
-          });
-
-          return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Check organization membership
-        |--------------------------------------------------------------------------
-        */
-
-        const membership =
-          await prisma.membership.findFirst({
-            where: {
-              userId: databaseUser.id,
-              organizationId:
-                board.organizationId,
-            },
-          });
-
-        if (!membership) {
-          send(socket, {
-            type: "error",
-            message:
-              "You are not a member of this organization",
-          });
-
-          return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prevent duplicate socket in same board
-        |--------------------------------------------------------------------------
-        */
-
-        if (!ROOMS[boardId]) {
-          ROOMS[boardId] = [];
-        }
-
-        const existingConnection =
-          ROOMS[boardId].find(
-            (roomUser) =>
-              roomUser.socket === socket
-          );
-
-        if (existingConnection) {
-          console.log(
-            `${databaseUser.username} is already in board ${boardId}`
-          );
-
-          return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Remove this user's old connection
-        |
-        | This prevents duplicate users if the same
-        | browser reconnects without the old socket
-        | being cleaned up yet.
-        |--------------------------------------------------------------------------
-        */
-
-        ROOMS[boardId] =
-          ROOMS[boardId].filter(
-            (roomUser) =>
-              roomUser.userId !==
-                databaseUser.id ||
-              roomUser.socket === socket
-          );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Get existing users BEFORE adding current user
-        |--------------------------------------------------------------------------
-        */
-
-        const existingUsers =
-          ROOMS[boardId].map(
-            (roomUser) => ({
-              id: roomUser.userId,
-              username:
-                roomUser.username,
-              online: true,
-            })
-          );
-
-        console.log(
-          "EXISTING USERS:",
-          existingUsers
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Add current user to room
-        |--------------------------------------------------------------------------
-        */
-
-        const currentUser: RoomUser = {
-          userId: databaseUser.id,
-          username:
-            databaseUser.username,
-          socket,
-        };
-
-        ROOMS[boardId].push(
-          currentUser
-        );
-
-        console.log(
-          `ROOM ${boardId}:`,
-          ROOMS[boardId].map(
-            (user) => ({
-              id: user.userId,
-              username: user.username,
-            })
-          )
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Send existing users to current user
-        |--------------------------------------------------------------------------
-        */
-
-        send(socket, {
-          type: "initial_stage",
-          users: existingUsers,
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Tell current user who they are
-        |--------------------------------------------------------------------------
-        */
-
-        send(socket, {
-          type: "you",
-          userId: databaseUser.id,
-        });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Tell OTHER users that current user joined
-        |--------------------------------------------------------------------------
-        */
-
-        broadcast(
-          ROOMS[boardId],
-          {
-            type: "join",
-            user: {
-              id: databaseUser.id,
-              username:
-                databaseUser.username,
-              online: true,
-            },
-          },
-          socket
-        );
-
-        console.log(
-          `${databaseUser.username} joined board ${boardId}`
-        );
-
-        return;
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | Unknown message
-      |--------------------------------------------------------------------------
-      */
-
-      send(socket, {
-        type: "error",
-        message: "Unknown message type",
-      });
+      console.log(
+        "WS JWT USER:",
+        userId
+      );
     } catch (error) {
       console.error(
-        "Error handling WebSocket message:",
+        "Invalid WebSocket token:",
         error
       );
 
-      send(socket, {
-        type: "error",
-        message: "Internal server error",
-      });
+      socket.close(
+        1008,
+        "Invalid token"
+      );
+
+      return;
     }
-  });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Handle disconnect
-  |--------------------------------------------------------------------------
-  */
+    /* =====================================================
+     * GET USER
+     * ===================================================== */
 
-  socket.on("close", () => {
+    try {
+      databaseUser =
+        await prisma.user.findUnique({
+          where: {
+            id: userId,
+          },
+          select: {
+            id: true,
+            username: true,
+          },
+        });
+    } catch (error) {
+      console.error(
+        "Error fetching WebSocket user:",
+        error
+      );
+
+      socket.close(
+        1011,
+        "Internal server error"
+      );
+
+      return;
+    }
+
+    if (!databaseUser) {
+      console.error(
+        "WS ERROR: User not found"
+      );
+
+      socket.close(
+        1008,
+        "User not found"
+      );
+
+      return;
+    }
+
     console.log(
-      `WS CLOSED: ${databaseUser.username}`
+      `WS AUTHENTICATED: ${databaseUser.username} (${databaseUser.id})`
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Find every room this socket belongs to
-    |--------------------------------------------------------------------------
-    */
+    /* =====================================================
+     * AUTH SUCCESS
+     * ===================================================== */
 
-    for (const [
-      boardId,
-      users,
-    ] of Object.entries(ROOMS)) {
-      const disconnectedUser =
-        users.find(
-          (roomUser) =>
-            roomUser.socket === socket
-        );
+    send(socket, {
+      type: "authenticated",
+      userId: databaseUser.id,
+    });
 
-      if (!disconnectedUser) {
-        continue;
-      }
+    /* =====================================================
+     * MESSAGE HANDLER
+     * ===================================================== */
 
-      /*
-      |--------------------------------------------------------------------------
-      | Remove user
-      |--------------------------------------------------------------------------
-      */
+    socket.on("message", async (rawData) => {
+      try {
+        let data: any;
 
-      ROOMS[boardId] =
-        users.filter(
-          (roomUser) =>
-            roomUser.socket !== socket
-        );
+        try {
+          data = JSON.parse(
+            rawData.toString()
+          );
+        } catch {
+          send(socket, {
+            type: "error",
+            message: "Invalid JSON",
+          });
 
-      console.log(
-        `${disconnectedUser.username} left board ${boardId}`
-      );
-
-      /*
-      |--------------------------------------------------------------------------
-      | Tell remaining users
-      |--------------------------------------------------------------------------
-      */
-
-      broadcast(
-        ROOMS[boardId],
-        {
-          type: "leave",
-          userId:
-            disconnectedUser.userId,
+          return;
         }
+
+        /* =================================================
+         * JOIN BOARD
+         * ================================================= */
+
+        if (data.type === "join") {
+          const boardId = data.boardId;
+
+          if (
+            typeof boardId !== "string" ||
+            !boardId
+          ) {
+            send(socket, {
+              type: "error",
+              message: "Board ID is required",
+            });
+
+            return;
+          }
+
+          /*
+           * Already joined this exact board.
+           */
+          if (joinedBoardId === boardId) {
+            console.log(
+              `${databaseUser!.username} already joined ${boardId}`
+            );
+
+            return;
+          }
+
+          /*
+           * If this socket was previously in another
+           * board, remove it first.
+           */
+          if (joinedBoardId) {
+            removeSocketFromRoom(
+              joinedBoardId,
+              socket
+            );
+
+            joinedBoardId = null;
+          }
+
+          /* ===============================================
+           * FIND BOARD
+           * =============================================== */
+
+          const board =
+            await prisma.board.findUnique({
+              where: {
+                id: boardId,
+              },
+            });
+
+          if (!board) {
+            send(socket, {
+              type: "error",
+              message: "Board not found",
+            });
+
+            return;
+          }
+
+          /* ===============================================
+           * MEMBERSHIP
+           * =============================================== */
+
+          const membership =
+            await prisma.membership.findFirst({
+              where: {
+                userId: databaseUser!.id,
+                organizationId:
+                  board.organizationId,
+              },
+            });
+
+          if (!membership) {
+            send(socket, {
+              type: "error",
+              message:
+                "You are not a member of this organization",
+            });
+
+            return;
+          }
+
+          /* ===============================================
+           * CREATE ROOM
+           * =============================================== */
+
+          if (!ROOMS[boardId]) {
+            ROOMS[boardId] = [];
+          }
+
+          /*
+           * Remove ANY stale connection for this same
+           * user in this board.
+           *
+           * This is important.
+           */
+          const oldConnections =
+            ROOMS[boardId].filter(
+              (roomUser) =>
+                roomUser.userId ===
+                databaseUser!.id
+            );
+
+          for (const oldConnection of oldConnections) {
+            if (
+              oldConnection.socket !== socket
+            ) {
+              try {
+                oldConnection.socket.close(
+                  1000,
+                  "Replaced by new connection"
+                );
+              } catch {
+                // Ignore close errors.
+              }
+            }
+          }
+
+          ROOMS[boardId] =
+            ROOMS[boardId].filter(
+              (roomUser) =>
+                roomUser.userId !==
+                databaseUser!.id
+            );
+
+          /* ===============================================
+           * GET EXISTING USERS
+           * =============================================== */
+
+          const existingUsers =
+            ROOMS[boardId].map(
+              (roomUser) => ({
+                id: roomUser.userId,
+                username:
+                  roomUser.username,
+                online: true,
+              })
+            );
+
+          /* ===============================================
+           * ADD CURRENT USER
+           * =============================================== */
+
+          const currentUser: RoomUser = {
+            userId:
+              databaseUser!.id,
+            username:
+              databaseUser!.username,
+            socket,
+          };
+
+          ROOMS[boardId].push(
+            currentUser
+          );
+
+          joinedBoardId = boardId;
+
+          console.log(
+            `USER ${databaseUser!.username} JOINED BOARD ${boardId}`
+          );
+
+          console.log(
+            `ROOM ${boardId} USERS:`,
+            ROOMS[boardId].map(
+              (roomUser) => ({
+                userId:
+                  roomUser.userId,
+                username:
+                  roomUser.username,
+                socketOpen:
+                  roomUser.socket.readyState ===
+                  WebSocket.OPEN,
+              })
+            )
+          );
+
+          /* ===============================================
+           * SEND EXISTING USERS TO CURRENT USER
+           * =============================================== */
+
+          send(socket, {
+            type: "initial_stage",
+            users: existingUsers,
+          });
+
+          /* ===============================================
+           * SEND CURRENT USER ID
+           * =============================================== */
+
+          send(socket, {
+            type: "you",
+            userId:
+              databaseUser!.id,
+          });
+
+          /* ===============================================
+           * TELL OTHER USERS
+           * =============================================== */
+
+          const joinedNotification = {
+            type: "join",
+            user: {
+              id:
+                databaseUser!.id,
+              username:
+                databaseUser!.username,
+              online: true,
+            },
+          };
+
+          for (const roomUser of ROOMS[
+            boardId
+          ]) {
+            if (
+              roomUser.socket !== socket
+            ) {
+              send(
+                roomUser.socket,
+                joinedNotification
+              );
+            }
+          }
+
+          return;
+        }
+
+        /* =================================================
+         * CHAT MESSAGE
+         * ================================================= */
+
+        if (
+          data.type === "chat_message"
+        ) {
+          const boardId =
+            data.boardId;
+
+          const content =
+            data.content;
+
+          /* ===============================================
+           * VALIDATION
+           * =============================================== */
+
+          if (
+            typeof boardId !==
+              "string" ||
+            !boardId
+          ) {
+            send(socket, {
+              type: "error",
+              message:
+                "Board ID is required",
+            });
+
+            return;
+          }
+
+          if (
+            typeof content !==
+              "string" ||
+            !content.trim()
+          ) {
+            send(socket, {
+              type: "error",
+              message:
+                "Message cannot be empty",
+            });
+
+            return;
+          }
+
+          const trimmedContent =
+            content.trim();
+
+          if (
+            trimmedContent.length >
+            1000
+          ) {
+            send(socket, {
+              type: "error",
+              message:
+                "Message cannot exceed 1000 characters",
+            });
+
+            return;
+          }
+
+          /* ===============================================
+           * VERIFY SOCKET IS IN THIS BOARD
+           * =============================================== */
+
+          if (
+            joinedBoardId !==
+            boardId
+          ) {
+            send(socket, {
+              type: "error",
+              message:
+                "You are not connected to this board",
+            });
+
+            return;
+          }
+
+          const room =
+            ROOMS[boardId];
+
+          if (!room) {
+            send(socket, {
+              type: "error",
+              message:
+                "Board room does not exist",
+            });
+
+            return;
+          }
+
+          const roomUser =
+            room.find(
+              (user) =>
+                user.socket === socket
+            );
+
+          if (!roomUser) {
+            send(socket, {
+              type: "error",
+              message:
+                "You are not joined to this board",
+            });
+
+            return;
+          }
+
+          /* ===============================================
+           * SAVE MESSAGE
+           * =============================================== */
+
+          const savedMessage =
+            await prisma.chatMessage.create(
+              {
+                data: {
+                  content:
+                    trimmedContent,
+                  userId:
+                    databaseUser!.id,
+                  boardId,
+                },
+
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                    },
+                  },
+                },
+              }
+            );
+
+          /* ===============================================
+           * MESSAGE FOR CLIENTS
+           * =============================================== */
+
+          const chatMessage = {
+            type: "chat_message",
+            id: savedMessage.id,
+            content:
+              savedMessage.content,
+            userId:
+              savedMessage.userId,
+            username:
+              savedMessage.user.username,
+            boardId:
+              savedMessage.boardId,
+            createdAt:
+              savedMessage.createdAt.toISOString(),
+          };
+
+          console.log(
+            "================================"
+          );
+
+          console.log(
+            "WS BROADCAST CHAT MESSAGE"
+          );
+
+          console.log(
+            "Board:",
+            boardId
+          );
+
+          console.log(
+            "Sender:",
+            databaseUser!.username
+          );
+
+          console.log(
+            "Message:",
+            trimmedContent
+          );
+
+          console.log(
+            "Recipients:",
+            room.length
+          );
+
+          console.log(
+            "Sockets:",
+            room.map(
+              (user) => ({
+                username:
+                  user.username,
+                state:
+                  user.socket.readyState,
+              })
+            )
+          );
+
+          console.log(
+            "================================"
+          );
+
+          /* ===============================================
+           * BROADCAST TO EVERYONE
+           * =============================================== */
+
+          broadcast(
+            room,
+            chatMessage
+          );
+
+          return;
+        }
+
+        /* =================================================
+         * UNKNOWN MESSAGE
+         * ================================================= */
+
+        send(socket, {
+          type: "error",
+          message:
+            "Unknown message type",
+        });
+      } catch (error) {
+        console.error(
+          "ERROR HANDLING WS MESSAGE:",
+          error
+        );
+
+        send(socket, {
+          type: "error",
+          message:
+            "Internal server error",
+        });
+      }
+    });
+
+    /* =====================================================
+     * CLOSE
+     * ===================================================== */
+
+    socket.on("close", () => {
+      console.log(
+        `WS CLOSED: ${databaseUser!.username}`
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Delete empty room
-      |--------------------------------------------------------------------------
-      */
+      if (joinedBoardId) {
+        const boardId =
+          joinedBoardId;
 
-      if (
-        ROOMS[boardId].length === 0
-      ) {
-        delete ROOMS[boardId];
+        const room =
+          ROOMS[boardId];
 
-        console.log(
-          `ROOM ${boardId} deleted`
-        );
+        if (room) {
+          const disconnectedUser =
+            room.find(
+              (roomUser) =>
+                roomUser.socket ===
+                socket
+            );
+
+          if (disconnectedUser) {
+            ROOMS[boardId] =
+              room.filter(
+                (roomUser) =>
+                  roomUser.socket !==
+                  socket
+              );
+
+            console.log(
+              `${disconnectedUser.username} left board ${boardId}`
+            );
+
+            /* =============================================
+             * NOTIFY OTHER USERS
+             * ============================================= */
+
+            broadcast(
+              ROOMS[boardId],
+              {
+                type: "leave",
+                userId:
+                  disconnectedUser.userId,
+              }
+            );
+
+            /* =============================================
+             * DELETE EMPTY ROOM
+             * ============================================= */
+
+            if (
+              ROOMS[boardId].length ===
+              0
+            ) {
+              delete ROOMS[boardId];
+
+              console.log(
+                `ROOM ${boardId} deleted`
+              );
+            }
+          }
+        }
+
+        joinedBoardId = null;
       }
-    }
-  });
+    });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Handle WebSocket errors
-  |--------------------------------------------------------------------------
-  */
+    /* =====================================================
+     * SOCKET ERROR
+     * ===================================================== */
 
-  socket.on("error", (error) => {
-    console.error(
-      `WebSocket error for ${databaseUser.username}:`,
-      error
-    );
-  });
-});
+    socket.on("error", (error) => {
+      console.error(
+        `WebSocket error for ${databaseUser!.username}:`,
+        error
+      );
+    });
+  }
+);
 
-/*
-|--------------------------------------------------------------------------
-| Server started
-|--------------------------------------------------------------------------
-*/
+/* =========================================================
+ * SERVER START
+ * ========================================================= */
 
 console.log(
   "WebSocket server running on ws://localhost:3002"

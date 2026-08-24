@@ -1,9 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getChatMessages } from "@/services/chat";
 
 export type OnlineUser = {
   id: string;
   username: string;
   online: boolean;
+};
+
+export type ChatMessage = {
+  id: string;
+  type: "chat_message";
+  content: string;
+  userId: string;
+  username: string;
+  boardId: string;
+  createdAt: string;
 };
 
 type WebSocketMessage =
@@ -32,6 +43,15 @@ type WebSocketMessage =
       };
     }
   | {
+      type: "chat_message";
+      id: string;
+      content: string;
+      userId: string;
+      username: string;
+      boardId: string;
+      createdAt: string;
+    }
+  | {
       type: "leave";
       userId: string;
     }
@@ -41,143 +61,123 @@ type WebSocketMessage =
     };
 
 const useBoardWebSocket = (boardId?: string) => {
-  const [onlineUsers, setOnlineUsers] =
-    useState<OnlineUser[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
 
-  const [connected, setConnected] =
-    useState(false);
+  const socketRef = useRef<WebSocket | null>(null);
 
+  /*
+   * =====================================================
+   * LOAD EXISTING DATABASE MESSAGES
+   * =====================================================
+   */
   useEffect(() => {
     if (!boardId) {
-      console.log("WS: no boardId");
+      setMessages([]);
       return;
     }
 
-    const token =
-      localStorage.getItem("token");
+    let cancelled = false;
+
+    const loadMessages = async () => {
+      try {
+        const existingMessages = await getChatMessages(boardId);
+
+        if (cancelled) {
+          return;
+        }
+
+        setMessages(
+          existingMessages.map((message) => ({
+            id: message.id,
+            type: "chat_message",
+            content: message.content,
+            userId: message.userId,
+            username: message.username,
+            boardId: message.boardId,
+            createdAt: message.createdAt,
+          }))
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load chat messages:",
+          error
+        );
+      }
+    };
+
+    loadMessages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [boardId]);
+
+  /*
+   * =====================================================
+   * WEBSOCKET CONNECTION
+   * =====================================================
+   */
+  useEffect(() => {
+    if (!boardId) {
+      return;
+    }
+
+    const token = localStorage.getItem("token");
 
     if (!token) {
-      console.error(
-        "WS: no token found"
-      );
+      console.error("WS: No authentication token");
       return;
     }
 
-    console.log(
-      "================================"
-    );
-    console.log(
-      "WS: CONNECTING"
-    );
-    console.log(
-      "WS: BOARD:",
-      boardId
-    );
-    console.log(
-      "================================"
-    );
-
     const socket = new WebSocket(
-      `ws://localhost:3002?token=${encodeURIComponent(
-        token
-      )}`
+      `ws://localhost:3002?token=${encodeURIComponent(token)}`
     );
 
-    /*
-     * WebSocket opened.
-     *
-     * IMPORTANT:
-     * We DO NOT join the board here.
-     *
-     * We wait for the server to tell us
-     * that authentication succeeded.
-     */
-    socket.onopen = () => {
-      console.log(
-        "WS: CONNECTION OPEN"
-      );
+    socketRef.current = socket;
 
+    socket.onopen = () => {
+      console.log("WS: Connected");
       setConnected(true);
     };
 
-    /*
-     * Server messages
-     */
     socket.onmessage = (event) => {
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "WS: RECEIVED RAW:"
-      );
-
-      console.log(event.data);
-
-      console.log(
-        "================================"
-      );
+      console.log("WS RECEIVED:", event.data);
 
       let data: WebSocketMessage;
 
       try {
-        data = JSON.parse(
-          event.data
-        );
-      } catch (error) {
-        console.error(
-          "WS: JSON PARSE ERROR:",
-          error
-        );
-
+        data = JSON.parse(event.data);
+      } catch {
+        console.error("WS: Invalid JSON");
         return;
       }
 
-      console.log(
-        "WS: PARSED MESSAGE:",
-        data
-      );
-
       /*
-       * ================================
+       * =================================================
        * AUTHENTICATED
-       * ================================
+       * =================================================
        */
-
-      if (
-        data.type ===
-        "authenticated"
-      ) {
+      if (data.type === "authenticated") {
         console.log(
-          "WS: AUTHENTICATED"
-        );
-
-        console.log(
-          "WS: USER ID:",
+          "WS: Authenticated:",
           data.userId
         );
 
+        setCurrentUserId(data.userId);
+
         /*
-         * NOW join the board.
+         * IMPORTANT:
+         * Join board only after authentication.
          */
-        const joinMessage = {
-          type: "join",
-          boardId,
-        };
-
-        console.log(
-          "WS: SENDING JOIN:",
-          joinMessage
-        );
-
-        if (
-          socket.readyState ===
-          WebSocket.OPEN
-        ) {
+        if (socket.readyState === WebSocket.OPEN) {
           socket.send(
-            JSON.stringify(
-              joinMessage
-            )
+            JSON.stringify({
+              type: "join",
+              boardId,
+            })
           );
         }
 
@@ -185,165 +185,133 @@ const useBoardWebSocket = (boardId?: string) => {
       }
 
       /*
-       * ================================
-       * YOU
-       * ================================
+       * =================================================
+       * CURRENT USER
+       * =================================================
        */
-
       if (data.type === "you") {
-        console.log(
-          "WS: THIS USER:",
-          data.userId
+        setCurrentUserId(data.userId);
+        return;
+      }
+
+      /*
+       * =================================================
+       * INITIAL ONLINE USERS
+       * =================================================
+       */
+      if (data.type === "initial_stage") {
+        setOnlineUsers(
+          data.users.map((user) => ({
+            id: user.id,
+            username: user.username,
+            online: true,
+          }))
         );
 
         return;
       }
 
       /*
-       * ================================
-       * INITIAL USERS
-       * ================================
+       * =================================================
+       * USER JOINED
+       * =================================================
        */
-
-      if (
-        data.type ===
-        "initial_stage"
-      ) {
-        console.log(
-          "WS: INITIAL USERS:"
-        );
-
-        console.log(
-          data.users
-        );
-
-        const users: OnlineUser[] =
-          data.users.map(
-            (user) => ({
-              id: user.id,
-              username:
-                user.username,
-              online: true,
-            })
+      if (data.type === "join") {
+        setOnlineUsers((previousUsers) => {
+          const exists = previousUsers.some(
+            (user) => user.id === data.user.id
           );
 
-        setOnlineUsers(users);
-
-        console.log(
-          "WS: ONLINE USERS STATE:",
-          users
-        );
-
-        return;
-      }
-
-      /*
-       * ================================
-       * USER JOINED
-       * ================================
-       */
-
-      if (data.type === "join") {
-        console.log(
-          "WS: USER JOINED:"
-        );
-
-        console.log(
-          data.user
-        );
-
-        setOnlineUsers(
-          (previousUsers) => {
-            /*
-             * Don't add duplicate users.
-             */
-            const alreadyExists =
-              previousUsers.some(
-                (user) =>
-                  user.id ===
-                  data.user.id
-              );
-
-            if (
-              alreadyExists
-            ) {
-              console.log(
-                "WS: USER ALREADY EXISTS:",
-                data.user.id
-              );
-
-              return previousUsers;
-            }
-
-            const newUser: OnlineUser =
-              {
-                id: data.user.id,
-                username:
-                  data.user.username,
-                online: true,
-              };
-
-            const updatedUsers = [
-              ...previousUsers,
-              newUser,
-            ];
-
-            console.log(
-              "WS: UPDATED ONLINE USERS:",
-              updatedUsers
-            );
-
-            return updatedUsers;
+          if (exists) {
+            return previousUsers;
           }
-        );
+
+          return [
+            ...previousUsers,
+            {
+              id: data.user.id,
+              username: data.user.username,
+              online: true,
+            },
+          ];
+        });
 
         return;
       }
 
       /*
-       * ================================
+       * =================================================
+       * CHAT MESSAGE
+       * =================================================
+       */
+      if (data.type === "chat_message") {
+        console.log(
+          "WS CHAT MESSAGE:",
+          data
+        );
+
+        /*
+         * Only accept messages belonging
+         * to this board.
+         */
+        if (data.boardId !== boardId) {
+          return;
+        }
+
+        const incomingMessage: ChatMessage = {
+          id: data.id,
+          type: "chat_message",
+          content: data.content,
+          userId: data.userId,
+          username: data.username,
+          boardId: data.boardId,
+          createdAt: data.createdAt,
+        };
+
+        setMessages((previousMessages) => {
+          /*
+           * Prevent duplicate messages.
+           */
+          const exists = previousMessages.some(
+            (message) =>
+              message.id === incomingMessage.id
+          );
+
+          if (exists) {
+            return previousMessages;
+          }
+
+          return [
+            ...previousMessages,
+            incomingMessage,
+          ];
+        });
+
+        return;
+      }
+
+      /*
+       * =================================================
        * USER LEFT
-       * ================================
+       * =================================================
        */
-
-      if (
-        data.type === "leave"
-      ) {
-        console.log(
-          "WS: USER LEFT:",
-          data.userId
-        );
-
-        setOnlineUsers(
-          (previousUsers) => {
-            const updatedUsers =
-              previousUsers.filter(
-                (user) =>
-                  user.id !==
-                  data.userId
-              );
-
-            console.log(
-              "WS: USERS AFTER LEAVE:",
-              updatedUsers
-            );
-
-            return updatedUsers;
-          }
+      if (data.type === "leave") {
+        setOnlineUsers((previousUsers) =>
+          previousUsers.filter(
+            (user) =>
+              user.id !== data.userId
+          )
         );
 
         return;
       }
 
       /*
-       * ================================
-       * ERROR
-       * ================================
+       * =================================================
+       * SERVER ERROR
+       * =================================================
        */
-
-      if (
-        data.type === "error"
-      ) {
+      if (data.type === "error") {
         console.error(
           "WS SERVER ERROR:",
           data.message
@@ -351,87 +319,101 @@ const useBoardWebSocket = (boardId?: string) => {
 
         return;
       }
-
-      console.warn(
-        "WS: UNKNOWN MESSAGE:",
-        data
-      );
     };
 
-    /*
-     * ================================
-     * ERROR
-     * ================================
-     */
-
     socket.onerror = (error) => {
-      console.error(
-        "================================"
-      );
-
-      console.error(
-        "WS ERROR:",
-        error
-      );
-
-      console.error(
-        "================================"
-      );
-
+      console.error("WS ERROR:", error);
       setConnected(false);
     };
 
-    /*
-     * ================================
-     * CLOSED
-     * ================================
-     */
-
     socket.onclose = (event) => {
       console.log(
-        "================================"
-      );
-
-      console.log(
-        "WS CLOSED"
-      );
-
-      console.log(
-        "CODE:",
-        event.code
-      );
-
-      console.log(
-        "REASON:",
+        "WS CLOSED:",
+        event.code,
         event.reason
-      );
-
-      console.log(
-        "================================"
       );
 
       setConnected(false);
       setOnlineUsers([]);
-    };
 
-    /*
-     * ================================
-     * CLEANUP
-     * ================================
-     */
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    };
 
     return () => {
-      console.log(
-        "WS: CLEANUP"
-      );
-
       socket.close();
+
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
     };
   }, [boardId]);
+
+  /*
+   * =====================================================
+   * SEND MESSAGE
+   * =====================================================
+   */
+  const sendMessage = (content: string) => {
+    const trimmedContent = content.trim();
+
+    if (!trimmedContent) {
+      return;
+    }
+
+    if (!boardId) {
+      console.error("WS: Missing boardId");
+      return;
+    }
+
+    const socket = socketRef.current;
+
+    if (!socket) {
+      console.error("WS: Socket does not exist");
+      return;
+    }
+
+    if (socket.readyState !== WebSocket.OPEN) {
+      console.error("WS: Socket is not connected");
+      return;
+    }
+
+    /*
+     * DO NOT call createChatMessage() here.
+     *
+     * The WebSocket server must:
+     *
+     * 1. authenticate the user
+     * 2. save the message to PostgreSQL
+     * 3. broadcast the saved message to everyone
+     *
+     * This prevents duplicate database messages.
+     */
+    socket.send(
+      JSON.stringify({
+        type: "chat_message",
+        boardId,
+        content: trimmedContent,
+      })
+    );
+
+    console.log(
+      "WS SENT:",
+      {
+        type: "chat_message",
+        boardId,
+        content: trimmedContent,
+      }
+    );
+  };
 
   return {
     onlineUsers,
     connected,
+    messages,
+    currentUserId,
+    sendMessage,
   };
 };
 

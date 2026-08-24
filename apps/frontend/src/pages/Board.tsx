@@ -14,6 +14,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import BoardSection from "@/components/board/BoardSection";
 import CreateIssueDialog from "@/components/board/CreateIssueDialog";
 import UserProfile from "@/components/board/UserProfile";
+import ChatComponent from "@/components/board/ChatComponent";
 
 import { Button } from "@/components/ui/button";
 
@@ -30,25 +31,30 @@ import {
 
 import useBoardWebSocket from "@/hooks/useBoardWebSocket";
 
+import type { ChatMessage } from "@/services/chat";
+
 const Board = () => {
   const { boardId } =
     useParams<{ boardId: string }>();
 
   /*
-   * =========================
-   * WebSocket
-   * =========================
+   * =====================================================
+   * WEBSOCKET
+   * =====================================================
    */
 
   const {
     onlineUsers,
     connected,
+    messages: socketMessages,
+    sendMessage,
+    currentUserId,
   } = useBoardWebSocket(boardId);
 
   /*
-   * =========================
-   * Board state
-   * =========================
+   * =====================================================
+   * BOARD STATE
+   * =====================================================
    */
 
   const [sections, setSections] =
@@ -64,23 +70,45 @@ const Board = () => {
     useState(false);
 
   /*
-   * =========================
-   * Load board
-   * =========================
+   * =====================================================
+   * CHAT
+   *
+   * IMPORTANT:
+   * Chat messages now come ONLY from the WebSocket hook.
+   *
+   * We do NOT fetch chat messages here.
+   * We do NOT create chat messages through REST here.
+   * =====================================================
+   */
+
+  const messages = socketMessages;
+
+  /*
+   * =====================================================
+   * LOAD BOARD
+   * =====================================================
    */
 
   useEffect(() => {
-    if (!boardId) return;
+    if (!boardId) {
+      return;
+    }
 
     const fetchBoard = async () => {
       try {
         setLoading(true);
 
+        /*
+         * Get sections
+         */
         const sectionData =
           await getSections(boardId);
 
         setSections(sectionData);
 
+        /*
+         * Get issues for every section
+         */
         const issueResults =
           await Promise.all(
             sectionData.map((section) =>
@@ -105,24 +133,89 @@ const Board = () => {
   }, [boardId]);
 
   /*
-   * =========================
-   * Create issue
-   * =========================
+   * =====================================================
+   * CREATE ISSUE
+   * =====================================================
    */
 
   const handleIssueCreated = (
     issue: Issue
   ) => {
-    setIssues((prev) => [
-      ...prev,
+    setIssues((previous) => [
+      ...previous,
       issue,
     ]);
   };
 
   /*
-   * =========================
-   * Drag and drop
-   * =========================
+   * =====================================================
+   * SEND CHAT MESSAGE
+   *
+   * IMPORTANT:
+   *
+   * DO NOT call createChatMessage().
+   *
+   * The WebSocket server is responsible for:
+   *
+   * 1. Receiving the message
+   * 2. Saving it to PostgreSQL
+   * 3. Broadcasting the saved message
+   *    to every connected user in the board room
+   *
+   * sendMessage() expects a STRING.
+   * =====================================================
+   */
+
+  const handleSendMessage = (
+    content: string
+  ) => {
+    if (!boardId) {
+      return;
+    }
+
+    const trimmedContent =
+      content.trim();
+
+    if (!trimmedContent) {
+      return;
+    }
+
+    if (!connected) {
+      console.error(
+        "Cannot send chat message: WebSocket is disconnected"
+      );
+
+      return;
+    }
+
+    /*
+     * Send ONLY the text.
+     *
+     * Previously this code was doing:
+     *
+     * sendMessage({
+     *   id,
+     *   type,
+     *   content,
+     *   ...
+     * })
+     *
+     * That caused:
+     *
+     * content.trim is not a function
+     *
+     * because useBoardWebSocket expects:
+     *
+     * sendMessage(content: string)
+     */
+
+    sendMessage(trimmedContent);
+  };
+
+  /*
+   * =====================================================
+   * DRAG AND DROP
+   * =====================================================
    */
 
   const handleDragEnd = async (
@@ -130,7 +223,9 @@ const Board = () => {
   ) => {
     const { operation } = event;
 
-    if (!operation) return;
+    if (!operation) {
+      return;
+    }
 
     const source =
       operation.source;
@@ -138,7 +233,9 @@ const Board = () => {
     const target =
       operation.target;
 
-    if (!source || !target) return;
+    if (!source || !target) {
+      return;
+    }
 
     const issueId =
       String(source.id);
@@ -151,7 +248,9 @@ const Board = () => {
         item.id === issueId
     );
 
-    if (!issue) return;
+    if (!issue) {
+      return;
+    }
 
     /*
      * Already in this section.
@@ -183,8 +282,8 @@ const Board = () => {
     /*
      * Optimistic update.
      */
-    setIssues((prev) =>
-      prev.map((item) =>
+    setIssues((previous) =>
+      previous.map((item) =>
         item.id === issueId
           ? {
               ...item,
@@ -209,8 +308,8 @@ const Board = () => {
       /*
        * Rollback.
        */
-      setIssues((prev) =>
-        prev.map((item) =>
+      setIssues((previous) =>
+        previous.map((item) =>
           item.id === issueId
             ? {
                 ...item,
@@ -224,9 +323,9 @@ const Board = () => {
   };
 
   /*
-   * =========================
-   * Board ID missing
-   * =========================
+   * =====================================================
+   * BOARD ID MISSING
+   * =====================================================
    */
 
   if (!boardId) {
@@ -242,9 +341,9 @@ const Board = () => {
   }
 
   /*
-   * =========================
-   * Loading
-   * =========================
+   * =====================================================
+   * LOADING
+   * =====================================================
    */
 
   if (loading) {
@@ -261,9 +360,9 @@ const Board = () => {
   }
 
   /*
-   * =========================
-   * Board
-   * =========================
+   * =====================================================
+   * BOARD
+   * =====================================================
    */
 
   return (
@@ -273,9 +372,7 @@ const Board = () => {
       >
         <div className="w-full min-w-0 space-y-5 sm:space-y-6">
 
-          {/* ========================= */}
-          {/* Board Header               */}
-          {/* ========================= */}
+          {/* BOARD HEADER */}
 
           <div
             className="
@@ -308,9 +405,7 @@ const Board = () => {
             </div>
           </div>
 
-          {/* ========================= */}
-          {/* WebSocket status           */}
-          {/* ========================= */}
+          {/* WEBSOCKET STATUS */}
 
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span
@@ -326,9 +421,7 @@ const Board = () => {
               : "Disconnected"}
           </div>
 
-          {/* ========================= */}
-          {/* Create Issue               */}
-          {/* ========================= */}
+          {/* CREATE ISSUE */}
 
           <div>
             <Button
@@ -345,9 +438,7 @@ const Board = () => {
             </Button>
           </div>
 
-          {/* ========================= */}
-          {/* Sections                   */}
-          {/* ========================= */}
+          {/* SECTIONS */}
 
           {sections.length === 0 ? (
             <div className="rounded-xl border border-dashed p-6 text-center sm:p-10">
@@ -368,13 +459,11 @@ const Board = () => {
                 flex-col
                 items-center
                 gap-4
-
                 sm:flex-row
                 sm:items-start
                 sm:gap-4
                 sm:overflow-x-auto
                 sm:overscroll-x-contain
-
                 pb-4
                 sm:pb-6
               "
@@ -392,7 +481,9 @@ const Board = () => {
                     <BoardSection
                       key={section.id}
                       section={section}
-                      issues={sectionIssues}
+                      issues={
+                        sectionIssues
+                      }
                       sections={sections}
                       onIssueCreated={
                         handleIssueCreated
@@ -404,9 +495,7 @@ const Board = () => {
             </div>
           )}
 
-          {/* ========================= */}
-          {/* Create Issue Dialog        */}
-          {/* ========================= */}
+          {/* CREATE ISSUE DIALOG */}
 
           {sections.length > 0 && (
             <CreateIssueDialog
@@ -422,6 +511,24 @@ const Board = () => {
               }
             />
           )}
+
+          {/* BOARD CHAT */}
+
+          <ChatComponent
+            messages={
+              messages as ChatMessage[]
+            }
+            currentUserId={
+              currentUserId
+            }
+            onSendMessage={
+              handleSendMessage
+            }
+            disabled={
+              !connected
+            }
+          />
+
         </div>
       </DragDropProvider>
     </AppLayout>
