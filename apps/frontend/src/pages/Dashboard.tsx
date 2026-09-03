@@ -17,6 +17,8 @@ import {
   Plus,
   Users,
   Loader2,
+  Pencil,
+  Trash2
 } from "lucide-react";
 
 import {
@@ -34,10 +36,11 @@ import {
 
 import {
   getBoards,
+  deleteBoard,
   type Board,
 } from "@/services/boards";
 
-import CreateBoardDialog from "@/components/dashboard/CreateBoardDialog";
+import BoardDialog from "@/components/common/BoardDialog";
 
 import { useNavigate } from "react-router-dom";
 
@@ -61,6 +64,8 @@ const Dashboard = () => {
 
   const [createBoardOpen, setCreateBoardOpen] =
     useState(false);
+  const [editBoardOpen, setEditBoardOpen] = useState(false);
+  const [selectedBoard, setSelectedBoard] = useState<Board | null>(null);
 
   // --------------------------------------------------
   // Fetch organizations
@@ -150,6 +155,23 @@ const Dashboard = () => {
     setBoards((prev) => [...prev, board]);
 
     setCreateBoardOpen(false);
+  };
+
+  // const updateBoard = async() => {
+  //   try {
+
+  //   } catch(error) {
+  //     console.log("error updating board", error);
+  //   }
+  // }
+
+  const handleDeleteBoard = async (boardId: string) => {
+    try {
+      await deleteBoard(boardId);
+      setBoards((prev) => prev.filter((board) => board.id !== boardId));
+    } catch (error) {
+      console.log("error deleting board", error);
+    }
   };
 
   // --------------------------------------------------
@@ -310,20 +332,50 @@ const Dashboard = () => {
                     }}
                   >
                     <CardHeader>
-                      <FolderKanban className="mb-2 h-5 w-5" />
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <FolderKanban className="mb-2 h-5 w-5" />
 
-                      <CardTitle>
-                        {board.title}
-                      </CardTitle>
+                          <CardTitle>
+                            {board.title}
+                          </CardTitle>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // edit board
+                              setSelectedBoard(board);
+                              setEditBoardOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // delete board
+                              handleDeleteBoard(board.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
 
                       <CardDescription>
-                        {board.description ||
-                          "No description"}
+                        {board.description || "No description"}
                       </CardDescription>
                     </CardHeader>
                   </Card>
-                ))}
-
+                  ))}
+                
                 {/* ------------------------------------ */}
                 {/* No boards */}
                 {/* ------------------------------------ */}
@@ -375,19 +427,37 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* -------------------------------------------- */}
-        {/* Create Board Dialog */}
-        {/* -------------------------------------------- */}
+        {/* Edit Dialog */}
+        {selectedOrganization && selectedBoard && (
+          <BoardDialog
+            open={editBoardOpen}
+            onOpenChange={setEditBoardOpen}
+            organizationId={selectedOrganization.id}
+            board={selectedBoard}
+            onBoardCreated={(updatedBoard) => {
+              setBoards((prev) =>
+                prev.map((board) =>
+                  board.id === updatedBoard.id
+                    ? updatedBoard
+                    : board
+                )
+              );
+            
+              setSelectedBoard(null);
+            }}
+          />
+        )}
 
+        {/* Create Board Dialog */}
         {selectedOrganization && (
-          <CreateBoardDialog
+          <BoardDialog
             open={createBoardOpen}
             onOpenChange={setCreateBoardOpen}
             organizationId={selectedOrganization.id}
             onBoardCreated={handleBoardCreated}
           />
         )}
-
+        
       </div>
     </AppLayout>
   );

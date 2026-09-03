@@ -17,22 +17,25 @@ import { Textarea } from "@/components/ui/textarea";
 
 import {
   createBoard,
+  updateBoard,
   type Board,
 } from "@/services/boards";
 
-interface CreateBoardDialogProps {
+interface BoardDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   onBoardCreated: (board: Board) => void;
+  board?: Board | null;
 }
 
-const CreateBoardDialog = ({
+const BoardDialog = ({
   open,
   onOpenChange,
   organizationId,
   onBoardCreated,
-}: CreateBoardDialogProps) => {
+  board,
+}: BoardDialogProps) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -59,22 +62,36 @@ const CreateBoardDialog = ({
       setLoading(true);
       setError(null);
 
-      const board = await createBoard(
-        organizationId,
-        name.trim(),
-        description.trim()
-      );
+      if(board) {
+        //update existing board
+        const updatedBoard = await updateBoard(
+          board.id,
+          name.trim(),
+          description.trim()
+        );
 
-      // Add the newly created board to Dashboard
-      onBoardCreated(board);
+        onBoardCreated(updatedBoard);
+      } else {
+        
+        //create new board
+        const newBoard = await createBoard(
+          organizationId,
+          name.trim(),
+          description.trim()
+        );
+  
+        // Add the newly created board to Dashboard
+        onBoardCreated(newBoard);
+  
+        resetForm();
+        onOpenChange(false);
+      }
 
-      resetForm();
-      onOpenChange(false);
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError("Failed to create board.");
+        setError(board ? "Failed to update board." : "Failed to create board.");
       }
     } finally {
       setLoading(false);
@@ -97,7 +114,7 @@ const CreateBoardDialog = ({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            Create a new board
+            {board ? "Edit Board" : "Create a new board"}
           </DialogTitle>
 
           <DialogDescription>
@@ -169,12 +186,12 @@ const CreateBoardDialog = ({
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  {board ? "Updating..." : "Creating..."}
                 </>
               ) : (
                 <>
                   <Plus className="mr-2 h-4 w-4" />
-                  Create Board
+                  {board ? "Update Board" : "Create Board"}
                 </>
               )}
             </Button>
@@ -185,4 +202,4 @@ const CreateBoardDialog = ({
   );
 };
 
-export default CreateBoardDialog;
+export default BoardDialog;

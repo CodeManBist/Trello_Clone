@@ -17,3 +17,16 @@ export function createBoard(organizationId: string, title: string, description?:
         body: JSON.stringify({ title, description }),
     });
 }
+
+export function updateBoard(boardId: string, title: string, description?: string) {
+    return apiRequest<Board>(`/boards/${boardId}`, {
+        method: "PUT",
+        body: JSON.stringify({ title, description }),
+    });
+}
+
+export function deleteBoard(boardId: string) {
+    return apiRequest<void>(`/boards/${boardId}`, {
+        method: "DELETE",
+    }); 
+}

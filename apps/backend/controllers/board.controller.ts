@@ -111,10 +111,10 @@ export async function createBoard(
 export async function updateBoard(req: Request<{ boardId: string }>, res: Response) {
     const { boardId } = req.params;
 
-    const { title } = req.body;
+    const { title, description } = req.body;
 
-    if(!title) {
-        return res.status(400).json({ message: 'title is required' });
+    if(!title || !description) {
+        return res.status(400).json({ message: 'title and description are required' });
     }
 
     try {
@@ -146,13 +146,14 @@ export async function updateBoard(req: Request<{ boardId: string }>, res: Respon
             },
             data: {
                 title,
+                description,
             }
         });
 
         return res.status(200).json(updatedBoard);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'error updating board' });
+        return res.status(500).json({ message: 'error updating board' });
     }
 }
 
