@@ -7,7 +7,6 @@ import LandingPage from "@/pages/LandingPage";
 import Dashboard from "@/pages/Dashboard";
 import Settings from "@/pages/Settings";
 import Board from "@/pages/Board";
-import Issue from "@/pages/Issue";
 import CreateOrganization from "@/pages/CreateOrganization";
 
 import { PublicRoute } from "@/components/auth/PublicRoute";
@@ -83,11 +82,6 @@ const App = () => {
               <Route
                 path="/boards/:boardId"
                 element={<Board />}
-              />
-
-              <Route
-                path="/issues/:issueId"
-                element={<Issue />}
               />
 
             </Route>

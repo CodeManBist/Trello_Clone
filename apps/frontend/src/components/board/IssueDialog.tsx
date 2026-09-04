@@ -16,73 +16,72 @@ import { Button } from "@/components/ui/button";
 
 import {
   createIssue,
+  updateIssue,
   type Issue,
 } from "@/services/issue";
 
 import type { Section } from "@/services/section";
 
-type CreateIssueDialogProps = {
+type IssueDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sections: Section[];
-  onCreated: (issue: Issue) => void;
+  onCreated?: (issue: Issue) => void;
+  onUpdated?: (issue: Issue) => void;
+  editingIssue?: Issue | null;
 };
 
-const CreateIssueDialog = ({
+const IssueDialog = ({
   open,
   onOpenChange,
   sections,
   onCreated,
-}: CreateIssueDialogProps) => {
-  const [title, setTitle] =
-    useState("");
+  onUpdated,
+  editingIssue = null,
+}: IssueDialogProps) => {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const [description, setDescription] =
-    useState("");
+  const isEditing = !!editingIssue;
 
-  const [sectionId, setSectionId] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  /*
-   * Automatically select first section.
-   */
+  // Reset form when dialog opens or editing issue changes
   useEffect(() => {
-    if (
-      open &&
-      sections.length > 0 &&
-      !sectionId
-    ) {
-      setSectionId(
-        sections[0].id
-      );
+    console.log("IssueDialog useEffect - open:", open, "editingIssue:", editingIssue);
+    if (open) {
+      if (editingIssue) {
+        // Edit mode - populate form with issue data
+        console.log("Populating form with issue data:", editingIssue);
+        setTitle(editingIssue.title);
+        setDescription(editingIssue.description || "");
+        setSectionId(editingIssue.sectionId);
+      } else if (sections.length > 0 && !sectionId) {
+        // Create mode - select first section
+        setSectionId(sections[0].id);
+      }
     }
-  }, [
-    open,
-    sections,
-    sectionId,
-  ]);
+  }, [open, editingIssue, sections]);
 
-  const handleCreate = async () => {
-    const trimmedTitle =
-      title.trim();
+  // Reset form when dialog closes
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setSectionId(sections.length > 0 ? sections[0].id : "");
+    setError("");
+  };
+
+  const handleSubmit = async () => {
+    const trimmedTitle = title.trim();
 
     if (!trimmedTitle) {
-      setError(
-        "Issue title is required."
-      );
+      setError("Issue title is required.");
       return;
     }
 
     if (!sectionId) {
-      setError(
-        "Please select a section."
-      );
+      setError("Please select a section.");
       return;
     }
 
@@ -90,61 +89,62 @@ const CreateIssueDialog = ({
       setLoading(true);
       setError("");
 
-      const issue =
-        await createIssue(
+      let issue: Issue;
+
+      if (isEditing && editingIssue) {
+        // Update existing issue
+        console.log("Updating issue:", editingIssue.id, trimmedTitle);
+        issue = await updateIssue(
+          editingIssue.id,
+          trimmedTitle,
+          description.trim() || undefined
+        );
+        onUpdated?.(issue);
+      } else {
+        // Create new issue
+        console.log("Creating issue:", trimmedTitle);
+        issue = await createIssue(
           sectionId,
           trimmedTitle,
-          description.trim() ||
-            undefined
+          description.trim() || undefined
         );
+        onCreated?.(issue);
+      }
 
-      onCreated(issue);
-
-      setTitle("");
-      setDescription("");
-      setSectionId("");
-
+      resetForm();
       onOpenChange(false);
     } catch (error) {
       console.error(
-        "Error creating issue:",
+        isEditing ? "Error updating issue:" : "Error creating issue:",
         error
       );
 
       setError(
         error instanceof Error
           ? error.message
-          : "Failed to create issue."
+          : isEditing
+            ? "Failed to update issue."
+            : "Failed to create issue."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOpenChange = (
-    value: boolean
-  ) => {
+  const handleOpenChange = (value: boolean) => {
     if (loading) {
       return;
     }
 
     if (!value) {
-      setTitle("");
-      setDescription("");
-      setSectionId("");
-      setError("");
+      resetForm();
     }
 
     onOpenChange(value);
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={
-        handleOpenChange
-      }
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="
           w-[calc(100%-1rem)]
@@ -159,12 +159,14 @@ const CreateIssueDialog = ({
       >
         <DialogHeader>
           <DialogTitle>
-            Create issue
+            {isEditing ? "Edit issue" : "Create issue"}
           </DialogTitle>
 
           <DialogDescription>
-            Create an issue and choose
-            which section it belongs to.
+            {isEditing
+              ? "Update the issue details below."
+              : "Create an issue and choose which section it belongs to."
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -179,10 +181,7 @@ const CreateIssueDialog = ({
         >
           {/* Title */}
           <div className="space-y-2">
-            <label
-              htmlFor="issue-title"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="issue-title" className="text-sm font-medium">
               Title
             </label>
 
@@ -190,36 +189,26 @@ const CreateIssueDialog = ({
               id="issue-title"
               placeholder="e.g. Fix login button"
               value={title}
-              onChange={(event) =>
-                setTitle(
-                  event.target.value
-                )
-              }
+              onChange={(event) => setTitle(event.target.value)}
               disabled={loading}
               autoFocus
             />
           </div>
 
-          {/* Section */}
+          {/* Section - Disabled in edit mode */}
           <div className="space-y-2">
-            <label
-              htmlFor="issue-section"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="issue-section" className="text-sm font-medium">
               Section
             </label>
 
             <select
               id="issue-section"
               value={sectionId}
-              onChange={(event) =>
-                setSectionId(
-                  event.target.value
-                )
-              }
+              onChange={(event) => setSectionId(event.target.value)}
               disabled={
                 loading ||
-                sections.length === 0
+                sections.length === 0 ||
+                isEditing // Disable section change in edit mode
               }
               className="
                 flex
@@ -241,24 +230,22 @@ const CreateIssueDialog = ({
                 disabled:opacity-50
               "
             >
-              <option value="">
-                Select a section
-              </option>
+              <option value="">Select a section</option>
 
-              {sections.map(
-                (section) => (
-                  <option
-                    key={section.id}
-                    value={section.id}
-                  >
-                    {section.title}
-                  </option>
-                )
-              )}
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.title}
+                </option>
+              ))}
             </select>
 
-            {sections.length ===
-              0 && (
+            {isEditing && (
+              <p className="text-xs text-muted-foreground">
+                Section cannot be changed while editing.
+              </p>
+            )}
+
+            {sections.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 This board has no sections.
               </p>
@@ -267,10 +254,7 @@ const CreateIssueDialog = ({
 
           {/* Description */}
           <div className="space-y-2">
-            <label
-              htmlFor="issue-description"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="issue-description" className="text-sm font-medium">
               Description
             </label>
 
@@ -278,11 +262,7 @@ const CreateIssueDialog = ({
               id="issue-description"
               placeholder="Describe the issue..."
               value={description}
-              onChange={(event) =>
-                setDescription(
-                  event.target.value
-                )
-              }
+              onChange={(event) => setDescription(event.target.value)}
               disabled={loading}
               rows={5}
               className="resize-none"
@@ -309,9 +289,7 @@ const CreateIssueDialog = ({
           <Button
             variant="outline"
             className="w-full sm:w-auto"
-            onClick={() =>
-              handleOpenChange(false)
-            }
+            onClick={() => handleOpenChange(false)}
             disabled={loading}
           >
             Cancel
@@ -319,20 +297,16 @@ const CreateIssueDialog = ({
 
           <Button
             className="w-full sm:w-auto"
-            onClick={handleCreate}
-            disabled={
-              loading ||
-              !title.trim() ||
-              !sectionId
-            }
+            onClick={handleSubmit}
+            disabled={loading || !title.trim() || !sectionId}
           >
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
+                {isEditing ? "Updating..." : "Creating..."}
               </>
             ) : (
-              "Create issue"
+              isEditing ? "Update issue" : "Create issue"
             )}
           </Button>
         </DialogFooter>
@@ -341,4 +315,4 @@ const CreateIssueDialog = ({
   );
 };
 
-export default CreateIssueDialog;
+export default IssueDialog;
