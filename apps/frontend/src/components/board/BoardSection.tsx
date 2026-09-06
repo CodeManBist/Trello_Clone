@@ -1,41 +1,48 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState } from "react";
 import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/react";
 import {
-  Plus,
   Pencil,
-  Trash2
+  Trash2,
+  Plus,
+  UserPlus
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import IssueDialog from "@/components/board/IssueDialog";
+import SectionDialog from "@/components/board/SectionDialog";
 
-import type { Section } from "@/services/section";
+import { deleteSection, type Section } from "@/services/section";
 import type { Issue } from "@/services/issue";
-import { deleteIssue, updateIssue } from "@/services/issue"; 
+import { deleteIssue } from "@/services/issue"; 
+import { Button } from "@/components/ui/button";
+
 
 type BoardSectionProps = {
   section: Section;
   issues: Issue[];
   sections: Section[];
+  boardId: string;
+  canManageAssignments: boolean;
   onIssueCreated: (issue: Issue) => void;
   onIssueUpdated: (issue: Issue) => void;
   onIssueDeleted: (issueId: string) => void;
+  onSectionUpdated: (section: Section) => void;
+  onSectionDeleted: (sectionId: string) => void;
 };
 
 type IssueCardProps = {
   issue: Issue;
   sections: Section[];
+  boardId: string;
+  canManageAssignments: boolean;
   onIssueUpdated: (issue: Issue) => void;
   onIssueDeleted: (issueId: string) => void;  
 };
 
-const IssueCard = ({ issue, sections, onIssueUpdated, onIssueDeleted }: IssueCardProps) => {
+const IssueCard = ({ issue, sections, boardId, canManageAssignments, onIssueUpdated, onIssueDeleted }: IssueCardProps) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const editButtonRef = useRef<HTMLButtonElement | null>(null);
-  
   const {
     ref,
     isDragging,
@@ -43,61 +50,23 @@ const IssueCard = ({ issue, sections, onIssueUpdated, onIssueDeleted }: IssueCar
     id: issue.id,
   });
 
-  // Force the dialog to open using a more reliable method
-  const openEditDialog = useCallback(() => {
-    console.log("Opening edit dialog for issue:", issue.id);
-    // Force a state update using a function to ensure it works
-    setEditDialogOpen(() => {
-      console.log("Setting editDialogOpen to true");
-      return true;
-    });
-  }, [issue.id]);
-
-  const handleEditClick = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log("Edit button clicked for issue:", issue.id);
-    console.log("Current editDialogOpen state before:", editDialogOpen);
-    
-    // Use requestAnimationFrame to ensure the click event is fully processed
-    requestAnimationFrame(() => {
-      openEditDialog();
-    });
-  }, [issue.id, openEditDialog, editDialogOpen]);
-
-  const handleDeleteClick = useCallback(async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
+  const handleDeleteClick = async () => {
     if (!confirm(`Are you sure you want to delete "${issue.title}"?`)) {
       return;
     }
     
     try {
-      console.log("Deleting issue:", issue.id);
       await deleteIssue(issue.id);
       onIssueDeleted(issue.id);
     } catch (error) {
       console.error("Error deleting issue:", error);
     }
-  }, [issue.id, issue.title, onIssueDeleted]);
+  };
 
-  const handleDialogOpenChange = useCallback((open: boolean) => {
-    console.log("Dialog onOpenChange:", open);
-    setEditDialogOpen(open);
-  }, []);
-
-  const handleIssueUpdated = useCallback((updatedIssue: Issue) => {
-    console.log("Issue updated:", updatedIssue);
+  const handleIssueUpdated = (updatedIssue: Issue) => {
     onIssueUpdated(updatedIssue);
     setEditDialogOpen(false);
-  }, [onIssueUpdated]);
-
-  // Debug: Log when dialog state changes
-  useEffect(() => {
-    console.log("editDialogOpen state changed to:", editDialogOpen);
-  }, [editDialogOpen]);
+  };
 
   return (
     <>
@@ -113,45 +82,83 @@ const IssueCard = ({ issue, sections, onIssueUpdated, onIssueDeleted }: IssueCar
             : "opacity-100",
         ].join(" ")}
       >
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-2">
+          {/* Top row: Assign button + Edit/Delete buttons */}
+          <div className="flex items-center justify-between">
+            {canManageAssignments ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setEditDialogOpen(true);
+                }}
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Assign</span>
+              </Button>
+            ) : (
+              <span className="truncate text-xs text-muted-foreground" title={issue.assignees?.map((assignee) => assignee.user.username).join(", ")}>
+                {issue.assignees?.length
+                  ? `Assigned: ${issue.assignees.map((assignee) => assignee.user.username).join(", ")}`
+                  : "Unassigned"}
+              </span>
+            )}
+
+            <div className="flex items-center gap-0.5">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => setEditDialogOpen(true)}
+                aria-label="Edit issue"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                onClick={handleDeleteClick}
+                aria-label="Delete issue"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Issue content */}
           <div className="min-w-0 flex-1">
-            <p className="break-words font-medium">
+            <p className="break-words font-medium text-sm">
               {issue.title}
             </p>
 
             {issue.description && (
-              <p className="mt-1 break-words text-sm text-muted-foreground">
+              <p className="mt-1 break-words text-xs text-muted-foreground">
                 {issue.description}
               </p>
             )}
-          </div>
 
-          <div className="flex shrink-0 gap-1">
-            <button
-              ref={editButtonRef}
-              onClick={handleEditClick}
-              className="h-4 w-4 shrink-0 text-muted-foreground cursor-pointer hover:text-foreground"
-              aria-label="Edit issue"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              className="h-4 w-4 shrink-0 text-muted-foreground cursor-pointer hover:text-destructive"
-              aria-label="Delete issue"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {issue.assignees && issue.assignees.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Assigned to {issue.assignees.map((assignee) => assignee.user.username).join(", ")}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Edit Dialog - Always render but control with open prop */}
       <IssueDialog
         open={editDialogOpen}
-        onOpenChange={handleDialogOpenChange}
+        onOpenChange={setEditDialogOpen}
         sections={sections}
+        boardId={boardId}
         onUpdated={handleIssueUpdated}
+        onAssigneesChanged={(issueId, assignees) =>
+          onIssueUpdated({ ...issue, id: issueId, assignees })
+        }
         editingIssue={issue}
       />
     </>
@@ -162,12 +169,16 @@ const BoardSection = ({
   section,
   issues,
   sections,
+  boardId,
+  canManageAssignments,
   onIssueCreated,
   onIssueUpdated,
   onIssueDeleted,
+  onSectionUpdated,
+  onSectionDeleted,
 }: BoardSectionProps) => {
   const [createOpen, setCreateOpen] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState(0);
+  const [editSectionOpen, setEditSectionOpen] = useState(false);
 
   const {
     ref: dropRef,
@@ -176,20 +187,27 @@ const BoardSection = ({
     id: section.id,
   });
 
-  // Force re-render when needed
-  const triggerUpdate = useCallback(() => {
-    setForceUpdate(prev => prev + 1);
-  }, []);
+  const handleDeleteSection = async () => {
+    if (!confirm(`Delete "${section.title}" and all of its issues?`)) return;
+    try {
+      await deleteSection(section.id);
+      onSectionDeleted(section.id);
+    } catch (error) {
+      console.error("Error deleting section:", error);
+    }
+  };
 
   return (
     <>
       <div
         ref={dropRef}
         className={[
-          "w-[calc(100vw-2rem)]",
-          "max-w-[360px]",
-          "sm:w-[320px]",
-          "lg:w-80",
+          "w-full",
+          "max-w-none",
+          "md:w-[300px]",
+          "md:max-w-[300px]",
+          "lg:w-[320px]",
+          "lg:max-w-[320px]",
           "shrink-0",
           "rounded-xl border",
           "bg-muted/30",
@@ -214,18 +232,27 @@ const BoardSection = ({
             </p>
           </div>
 
-          <Button
-            size="icon"
-            variant="ghost"
-            className="shrink-0"
-            onClick={() => {
-              console.log("Opening create dialog");
-              setCreateOpen(true);
-            }}
-            title="Create issue"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {canManageAssignments && (
+              <>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditSectionOpen(true)} title="Rename section" aria-label="Rename section">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={handleDeleteSection} title="Delete section" aria-label="Delete section">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => setCreateOpen(true)}
+              title="Create issue"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Drop area */}
@@ -244,23 +271,15 @@ const BoardSection = ({
               <p className="text-sm text-muted-foreground">
                 No issues
               </p>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2"
-                onClick={() => setCreateOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add issue
-              </Button>
             </div>
           ) : (
             issues.map((issue) => (
               <IssueCard
-                key={issue.id + forceUpdate} // Force re-render on update
+                key={issue.id}
                 issue={issue}
                 sections={sections}
+                boardId={boardId}
+                canManageAssignments={canManageAssignments}
                 onIssueUpdated={onIssueUpdated}
                 onIssueDeleted={onIssueDeleted}
               />
@@ -269,7 +288,6 @@ const BoardSection = ({
         </div>
       </div>
 
-      {/* Create Dialog */}
       <IssueDialog
         open={createOpen}
         onOpenChange={(open) => {
@@ -277,12 +295,23 @@ const BoardSection = ({
           setCreateOpen(open);
         }}
         sections={sections}
+        boardId={boardId}
         onCreated={(newIssue) => {
           console.log("Issue created:", newIssue);
           onIssueCreated(newIssue);
           setCreateOpen(false);
         }}
       />
+
+      {canManageAssignments && (
+        <SectionDialog
+          open={editSectionOpen}
+          onOpenChange={setEditSectionOpen}
+          boardId={boardId}
+          section={section}
+          onSaved={onSectionUpdated}
+        />
+      )}
     </>
   );
 };

@@ -13,6 +13,7 @@ import {
 import AppLayout from "@/components/layout/AppLayout";
 import BoardSection from "@/components/board/BoardSection";
 import CreateIssueDialog from "@/components/board/IssueDialog";
+import SectionDialog from "@/components/board/SectionDialog";
 import UserProfile from "@/components/board/UserProfile";
 import ChatComponent from "@/components/board/ChatComponent";
 
@@ -28,6 +29,7 @@ import {
   moveIssue,
   type Issue,
 } from "@/services/issue";
+import { getBoardMembers } from "@/services/boards";
 
 import useBoardWebSocket from "@/hooks/useBoardWebSocket";
 
@@ -60,6 +62,8 @@ const Board = () => {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [createSectionOpen, setCreateSectionOpen] = useState(false);
+  const [canManageAssignments, setCanManageAssignments] = useState(false);
 
   /*
    * =====================================================
@@ -84,8 +88,12 @@ const Board = () => {
       try {
         setLoading(true);
 
-        const sectionData = await getSections(boardId);
+        const [sectionData, boardMemberData] = await Promise.all([
+          getSections(boardId),
+          getBoardMembers(boardId),
+        ]);
         setSections(sectionData);
+        setCanManageAssignments(boardMemberData.canManageAssignments);
 
         const issueResults = await Promise.all(
           sectionData.map((section) => getIssues(section.id))
@@ -140,6 +148,20 @@ const Board = () => {
       console.log("Issues remaining:", updated.length);
       return updated;
     });
+  };
+
+  const handleSectionSaved = (savedSection: Section) => {
+    setSections((previous) => {
+      const exists = previous.some((section) => section.id === savedSection.id);
+      return exists
+        ? previous.map((section) => section.id === savedSection.id ? savedSection : section)
+        : [...previous, savedSection];
+    });
+  };
+
+  const handleSectionDeleted = (sectionId: string) => {
+    setSections((previous) => previous.filter((section) => section.id !== sectionId));
+    setIssues((previous) => previous.filter((issue) => issue.sectionId !== sectionId));
   };
 
   /*
@@ -302,7 +324,7 @@ const Board = () => {
               </p>
             </div>
 
-            <div className="flex min-w-0 items-center sm:justify-end">
+            <div className="flex min-w-0 items-center overflow-x-auto sm:justify-end">
               <UserProfile users={onlineUsers} />
             </div>
           </div>
@@ -320,7 +342,7 @@ const Board = () => {
           </div>
 
           {/* CREATE ISSUE */}
-          <div>
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               className="w-full sm:w-auto"
               onClick={() => setCreateIssueOpen(true)}
@@ -329,6 +351,12 @@ const Board = () => {
               <Plus className="mr-2 h-4 w-4" />
               Create issue
             </Button>
+            {canManageAssignments && (
+              <Button className="w-full sm:w-auto" variant="outline" onClick={() => setCreateSectionOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create section
+              </Button>
+            )}
           </div>
 
           {/* SECTIONS */}
@@ -346,15 +374,16 @@ const Board = () => {
                 w-full
                 min-w-0
                 flex-col
-                items-center
+                items-stretch
                 gap-4
-                sm:flex-row
-                sm:items-start
-                sm:gap-4
-                sm:overflow-x-auto
-                sm:overscroll-x-contain
+                md:flex-row
+                md:items-start
+                md:overflow-x-auto
+                md:overscroll-x-contain
+                md:pb-2
                 pb-4
-                sm:pb-6
+                sm:pb-5
+                lg:pb-6
               "
             >
               {sections.map((section) => {
@@ -368,9 +397,13 @@ const Board = () => {
                     section={section}
                     issues={sectionIssues}
                     sections={sections}
+                    boardId={boardId}
+                    canManageAssignments={canManageAssignments}
                     onIssueCreated={handleIssueCreated}
                     onIssueUpdated={handleIssueUpdated}
                     onIssueDeleted={handleIssueDeleted}
+                    onSectionUpdated={handleSectionSaved}
+                    onSectionDeleted={handleSectionDeleted}
                   />
                 );
               })}
@@ -383,7 +416,17 @@ const Board = () => {
               open={createIssueOpen}
               onOpenChange={setCreateIssueOpen}
               sections={sections}
+              boardId={boardId}
               onCreated={handleIssueCreated}
+            />
+          )}
+
+          {canManageAssignments && (
+            <SectionDialog
+              open={createSectionOpen}
+              onOpenChange={setCreateSectionOpen}
+              boardId={boardId}
+              onSaved={handleSectionSaved}
             />
           )}
 

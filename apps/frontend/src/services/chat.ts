@@ -23,17 +23,3 @@ export function getChatMessages(
 /*
  * Create a new chat message
  */
-export function createChatMessage(
-  boardId: string,
-  content: string
-) {
-  return apiRequest<ChatMessage>(
-    `/boards/${boardId}/chat-messages`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        content,
-      }),
-    }
-  );
-}

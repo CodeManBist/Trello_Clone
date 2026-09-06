@@ -1,6 +1,47 @@
 import type { Request, Response } from 'express';
 import { prisma } from 'db/client';
 
+// Boards inherit their members from their organization.
+export async function getBoardMembers(
+    req: Request<{ boardId: string }>,
+    res: Response
+) {
+    const { boardId } = req.params;
+
+    try {
+        const board = await prisma.board.findUnique({
+            where: { id: boardId },
+            select: { organizationId: true },
+        });
+
+        if (!board) {
+            return res.status(404).json({ message: 'Board not found' });
+        }
+
+        const membership = await prisma.membership.findFirst({
+            where: { userId: req.userId, organizationId: board.organizationId },
+        });
+
+        if (!membership) {
+            return res.status(403).json({ message: 'You are not a member of this organization' });
+        }
+
+        const members = await prisma.membership.findMany({
+            where: { organizationId: board.organizationId },
+            include: { user: { select: { id: true, username: true, email: true } } },
+            orderBy: { user: { username: 'asc' } },
+        });
+
+        return res.status(200).json({
+            members,
+            canManageAssignments: membership.role === 'ADMIN',
+        });
+    } catch (error) {
+        console.error('Error fetching board members:', error);
+        return res.status(500).json({ message: 'Error fetching board members' });
+    }
+}
+
 export async function getBoards(req: Request<{ organizationId: string }>, res: Response) {
     const { organizationId } = req.params;
 

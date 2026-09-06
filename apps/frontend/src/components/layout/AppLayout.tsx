@@ -28,7 +28,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     <SidebarProvider>
       <AppSidebar />
 
-      <SidebarInset className="bg-neutral-50">
+      <SidebarInset className="min-w-0 bg-neutral-50">
         {/* Top bar */}
         <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-neutral-200 bg-white/80 px-4 backdrop-blur-sm">
           <SidebarTrigger className="text-neutral-500 transition-colors hover:text-neutral-900" />
@@ -39,7 +39,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );

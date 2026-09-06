@@ -123,7 +123,7 @@
     }
   body {
     font-family: Geist, Inter, sans-serif;
-    @apply bg-background text-foreground;
+    @apply min-w-0 overflow-x-hidden bg-background text-foreground;
     }
   html {
     @apply font-sans;

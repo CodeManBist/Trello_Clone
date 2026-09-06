@@ -6,7 +6,7 @@ export async function createComment(
   res: Response
 ) {
   const { issueId } = req.params;
-  const { content } = req.body;
+  const content = String(req.body.content ?? "").trim();
 
   if (!content) {
     return res.status(400).json({
@@ -54,7 +54,13 @@ export async function createComment(
         issueId,
       },
       include: {
-        user: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -112,7 +118,13 @@ export async function getComments(
           issueId,
         },
         include: {
-          user: true,
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
         },
         orderBy: {
           id: "asc",
@@ -130,15 +142,14 @@ export async function getComments(
   }
 
   export async function updateComment(
-    req: Request< {commentId: string} >,
+    req: Request<{ commentId: string }>,
     res: Response
   ) {
-    const { issueId } = req.params;
-
-    const { content } = req.body;
+    const { commentId } = req.params;
+    const content = String(req.body.content ?? "").trim();
 
     if(!content) {
-        res.status(400).json({ message: "Comment content is required" });
+        return res.status(400).json({ message: "Comment content is required" });
     }
 
     try {
@@ -163,13 +174,22 @@ export async function getComments(
             data: {
                 content,
             },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        email: true,
+                    },
+                },
+            },
         });
 
         return res.status(200).json(updatedComment);
 
     } catch(error) {
         console.log(error);
-        res.status(500).json({ message: "Error updating comment" })
+        return res.status(500).json({ message: "Error updating comment" });
     }
   }
 

@@ -110,7 +110,7 @@ const Invitations = () => {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-4xl space-y-8">
+      <div className="mx-auto max-w-4xl space-y-6 sm:space-y-8">
         {/* Page header */}
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -177,8 +177,8 @@ const Invitations = () => {
               return (
                 <Card key={invitation.id}>
                   <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="flex min-w-0 items-start gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                           <Mail className="h-5 w-5" />
                         </div>
@@ -195,7 +195,7 @@ const Invitations = () => {
                         </div>
                       </div>
 
-                      <span className="rounded-full border px-2.5 py-1 text-xs font-medium">
+                      <span className="w-fit rounded-full border px-2.5 py-1 text-xs font-medium">
                         Pending
                       </span>
                     </div>

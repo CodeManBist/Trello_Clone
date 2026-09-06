@@ -1,4 +1,10 @@
 import { apiRequest } from "./api";
+import type { OrganizationMember } from "./organizations";
+
+export type BoardMembersResponse = {
+    members: OrganizationMember[];
+    canManageAssignments: boolean;
+};
 
 export type Board = {
     id: string;
@@ -29,4 +35,8 @@ export function deleteBoard(boardId: string) {
     return apiRequest<void>(`/boards/${boardId}`, {
         method: "DELETE",
     }); 
+}
+
+export function getBoardMembers(boardId: string) {
+    return apiRequest<BoardMembersResponse>(`/boards/${boardId}/members`);
 }

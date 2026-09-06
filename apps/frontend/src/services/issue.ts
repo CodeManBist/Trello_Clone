@@ -56,16 +56,6 @@ export function getIssues(sectionId: string) {
 }
 
 /* ----------------------------- */
-/* Get single issue               */
-/* ----------------------------- */
-
-export function getIssue(issueId: string) {
-  return apiRequest<Issue>(
-    `/issues/${issueId}`
-  );
-}
-
-/* ----------------------------- */
 /* Create issue                   */
 /* ----------------------------- */
 
@@ -132,3 +122,32 @@ export function moveIssue(issueId: string, sectionId: string) {
     }
   );
 }
+
+export type AssignUserResponse = IssueAssignee;
+export type RemoveUserResponse = {
+  message: string;
+}
+
+export function assignUserToIssue(issueId: string, userId: string) {
+  return apiRequest<AssignUserResponse>(
+    `/issues/${issueId}/assignees/${userId}`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export function removeUserFromIssue(issueId: string, userId: string) {
+  return apiRequest<RemoveUserResponse>(
+    `/issues/${issueId}/assignees/${userId}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+export function getIssueAssignees(issueId: string) {
+  return apiRequest<IssueAssignee[]>(
+    `/issues/${issueId}/assignees`
+  );
+} 

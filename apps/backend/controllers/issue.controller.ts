@@ -44,12 +44,24 @@ export async function getIssues(
       include: {
         assignees: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
           },
         },
         comments: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -283,12 +295,13 @@ export async function assignUserToIssue(
         where: {
           userId: req.userId,
           organizationId,
+          role: "ADMIN",
         },
       });
   
       if (!currentUserMembership) {
         return res.status(403).json({
-          message: "You are not a member of this organization",
+          message: "Only organization admins can assign issue members",
         });
       }
   
@@ -310,6 +323,15 @@ export async function assignUserToIssue(
         data: {
           issueId,
           userId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
         },
       });
   
@@ -418,11 +440,84 @@ export async function assignUserToIssue(
     }
   }
 
+  // DELETE user from issue
   export async function removeUserFromIssue(
     req: Request<{ issueId: string; userId: string }>,
     res: Response
   ) {
     const { issueId, userId } = req.params;
+  
+    try {
+      const issue = await prisma.issue.findUnique({
+        where: {
+          id: issueId,
+        },
+        include: {
+          section: {
+            include: {
+              board: true,
+            },
+          },
+        },
+      });
+  
+      if (!issue) {
+        return res.status(404).json({
+          message: "Issue not found",
+        });
+      }
+  
+      const membership = await prisma.membership.findFirst({
+        where: {
+          userId: req.userId,
+          organizationId: issue.section.board.organizationId,
+          role: "ADMIN",
+        },
+      });
+  
+      if (!membership) {
+        return res.status(403).json({
+          message: "Only organization admins can remove issue assignees",
+        });
+      }
+  
+      const assignment = await prisma.issuesMapping.findFirst({
+        where: {
+          issueId,
+          userId,
+        },
+      });
+  
+      if (!assignment) {
+        return res.status(404).json({
+          message: "User is not assigned to this issue",
+        });
+      }
+  
+      await prisma.issuesMapping.delete({
+        where: {
+          id: assignment.id,
+        },
+      });
+  
+      return res.status(200).json({
+        message: "User removed from issue successfully",
+      });
+    } catch (error) {
+      console.error(error);
+  
+      return res.status(500).json({
+        message: "Error removing user from issue",
+      });
+    }
+  }
+
+  // GET issue assignees
+  export async function getIssueAssignees(
+    req: Request<{ issueId: string }>,
+    res: Response
+  ) {
+    const { issueId } = req.params;
   
     try {
       const issue = await prisma.issue.findUnique({
@@ -457,33 +552,26 @@ export async function assignUserToIssue(
         });
       }
   
-      const assignment = await prisma.issuesMapping.findFirst({
+      const assignees = await prisma.issuesMapping.findMany({
         where: {
           issueId,
-          userId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+            },
+          },
         },
       });
   
-      if (!assignment) {
-        return res.status(404).json({
-          message: "User is not assigned to this issue",
-        });
-      }
-  
-      await prisma.issuesMapping.delete({
-        where: {
-          id: assignment.id,
-        },
-      });
-  
-      return res.status(200).json({
-        message: "User removed from issue successfully",
-      });
+      return res.status(200).json(assignees);
     } catch (error) {
       console.error(error);
-  
       return res.status(500).json({
-        message: "Error removing user from issue",
+        message: "Error getting issue assignees",
       });
     }
   }

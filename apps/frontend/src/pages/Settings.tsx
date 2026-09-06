@@ -188,8 +188,8 @@ const Settings = () => {
 
         <Card>
           <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0">
                 <CardTitle className="flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
                   Organization
@@ -201,7 +201,7 @@ const Settings = () => {
               </div>
 
               {/* Role badge */}
-              <div className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs">
+              <div className="flex w-fit shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs">
                 <Shield className="h-3.5 w-3.5" />
 
                 {isAdmin ? "Admin" : "Member"}
@@ -224,7 +224,7 @@ const Settings = () => {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-between sm:w-[320px]"
+                  className="w-full justify-between sm:w-[320px]"
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <Building2 className="h-4 w-4 shrink-0" />
@@ -242,7 +242,7 @@ const Settings = () => {
 
                 <DropdownMenuContent
                   align="start"
-                  className="w-[320px]"
+                  className="w-[min(320px,calc(100vw-2rem))]"
                 >
                   <DropdownMenuGroup>
                     {organizations.map(
@@ -299,7 +299,7 @@ const Settings = () => {
             {/* -------------------------------------- */}
 
             <div className="rounded-lg border bg-muted/20 p-5">
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3 sm:gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-background">
                   <Building2 className="h-5 w-5" />
                 </div>
@@ -336,8 +336,8 @@ const Settings = () => {
         {isAdmin && (
           <Card>
             <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
                     Invitations
@@ -349,7 +349,7 @@ const Settings = () => {
                   </CardDescription>
                 </div>
 
-                <Button
+                <Button className="w-full sm:w-auto"
                   onClick={() =>
                     setInviteOpen(true)
                   }

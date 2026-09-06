@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Pencil, Trash2, UserMinus, UserPlus } from "lucide-react";
 
 import {
   Dialog,
@@ -15,10 +15,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 import {
+  assignUserToIssue,
   createIssue,
+  getIssueAssignees,
+  removeUserFromIssue,
   updateIssue,
+  type IssueAssignee,
+  type IssueComment,
   type Issue,
 } from "@/services/issue";
+import { getBoardMembers } from "@/services/boards";
+import type { OrganizationMember } from "@/services/organizations";
+import { createComment, deleteComment, getComments, updateComment } from "@/services/comments";
+import { useAuth } from "@/context/AuthContext";
 
 import type { Section } from "@/services/section";
 
@@ -26,24 +35,40 @@ type IssueDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sections: Section[];
+  boardId: string;
   onCreated?: (issue: Issue) => void;
   onUpdated?: (issue: Issue) => void;
   editingIssue?: Issue | null;
+  onAssigneesChanged?: (issueId: string, assignees: IssueAssignee[]) => void;
 };
 
 const IssueDialog = ({
   open,
   onOpenChange,
   sections,
+  boardId,
   onCreated,
   onUpdated,
   editingIssue = null,
+  onAssigneesChanged,
 }: IssueDialogProps) => {
+  const { user } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sectionId, setSectionId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [assignees, setAssignees] = useState<IssueAssignee[]>([]);
+  const [assigneesLoading, setAssigneesLoading] = useState(false);
+  const [canManageAssignments, setCanManageAssignments] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [changingUserId, setChangingUserId] = useState<string | null>(null);
+  const [comments, setComments] = useState<IssueComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentContent, setCommentContent] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentSaving, setCommentSaving] = useState(false);
 
   const isEditing = !!editingIssue;
 
@@ -63,6 +88,34 @@ const IssueDialog = ({
       }
     }
   }, [open, editingIssue, sections]);
+
+  useEffect(() => {
+    if (!open || !editingIssue) return;
+
+    const loadAssigneeData = async () => {
+      try {
+        setAssigneesLoading(true);
+        setCommentsLoading(true);
+        const [boardMemberData, issueAssignees, issueComments] = await Promise.all([
+          getBoardMembers(boardId),
+          getIssueAssignees(editingIssue.id),
+          getComments(editingIssue.id),
+        ]);
+        setMembers(boardMemberData.members);
+        setCanManageAssignments(boardMemberData.canManageAssignments);
+        setAssignees(issueAssignees);
+        setComments(issueComments);
+        setSelectedMemberId("");
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load assignees.");
+      } finally {
+        setAssigneesLoading(false);
+        setCommentsLoading(false);
+      }
+    };
+
+    loadAssigneeData();
+  }, [open, editingIssue, boardId]);
 
   // Reset form when dialog closes
   const resetForm = () => {
@@ -141,6 +194,83 @@ const IssueDialog = ({
     }
 
     onOpenChange(value);
+  };
+
+  const assignSelectedMember = async () => {
+    if (!editingIssue) return;
+
+    const member = members.find((item) => item.userId === selectedMemberId);
+    if (!member) return;
+
+    try {
+      setChangingUserId(member.userId);
+      const assignment = await assignUserToIssue(editingIssue.id, member.userId);
+      const nextAssignees = [...assignees, assignment];
+      setAssignees(nextAssignees);
+      setSelectedMemberId("");
+      onAssigneesChanged?.(editingIssue.id, nextAssignees);
+    } catch (assignmentError) {
+      setError(assignmentError instanceof Error ? assignmentError.message : "Failed to update assignee.");
+    } finally {
+      setChangingUserId(null);
+    }
+  };
+
+  const removeAssignee = async (assignee: IssueAssignee) => {
+    if (!editingIssue) return;
+
+    try {
+      setChangingUserId(assignee.userId);
+      await removeUserFromIssue(editingIssue.id, assignee.userId);
+      const nextAssignees = assignees.filter((item) => item.userId !== assignee.userId);
+      setAssignees(nextAssignees);
+      onAssigneesChanged?.(editingIssue.id, nextAssignees);
+    } catch (assignmentError) {
+      setError(assignmentError instanceof Error ? assignmentError.message : "Failed to remove assignee.");
+    } finally {
+      setChangingUserId(null);
+    }
+  };
+
+  const saveComment = async () => {
+    if (!editingIssue || !commentContent.trim()) return;
+    try {
+      setCommentSaving(true);
+      const saved = editingCommentId
+        ? await updateComment(editingCommentId, commentContent.trim())
+        : await createComment(editingIssue.id, commentContent.trim());
+      setComments((previous) => editingCommentId
+        ? previous.map((comment) => comment.id === saved.id ? saved : comment)
+        : [...previous, saved]);
+      setCommentContent("");
+      setEditingCommentId(null);
+    } catch (commentError) {
+      setError(commentError instanceof Error ? commentError.message : "Failed to save comment.");
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
+  const startEditingComment = (comment: IssueComment) => {
+    setEditingCommentId(comment.id);
+    setCommentContent(comment.content);
+  };
+
+  const removeComment = async (comment: IssueComment) => {
+    if (!confirm("Delete this comment?")) return;
+    try {
+      setCommentSaving(true);
+      await deleteComment(comment.id);
+      setComments((previous) => previous.filter((item) => item.id !== comment.id));
+      if (editingCommentId === comment.id) {
+        setEditingCommentId(null);
+        setCommentContent("");
+      }
+    } catch (commentError) {
+      setError(commentError instanceof Error ? commentError.message : "Failed to delete comment.");
+    } finally {
+      setCommentSaving(false);
+    }
   };
 
   return (
@@ -268,6 +398,106 @@ const IssueDialog = ({
               className="resize-none"
             />
           </div>
+
+          {isEditing && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Assignees</label>
+              {assigneesLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading members...
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1 rounded-md border p-2">
+                    {assignees.length === 0 ? (
+                      <p className="px-1 py-2 text-sm text-muted-foreground">No one is assigned.</p>
+                    ) : (
+                      assignees.map((assignee) => (
+                        <div key={assignee.id} className="flex items-center justify-between gap-3 rounded px-1 py-1.5">
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium">{assignee.user.username}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{assignee.user.email}</span>
+                          </span>
+                          {canManageAssignments && (
+                            <Button type="button" size="sm" variant="ghost" className="shrink-0 text-destructive hover:text-destructive" onClick={() => removeAssignee(assignee)} disabled={changingUserId !== null}>
+                              {changingUserId === assignee.userId ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="mr-1 h-4 w-4" />}
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {canManageAssignments ? (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <select
+                        aria-label="Member to assign"
+                        value={selectedMemberId}
+                        onChange={(event) => setSelectedMemberId(event.target.value)}
+                        disabled={changingUserId !== null || members.length === assignees.length}
+                        className="flex h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Select a member</option>
+                        {members.filter((member) => !assignees.some((assignee) => assignee.userId === member.userId)).map((member) => (
+                          <option key={member.id} value={member.userId}>{member.user.username} ({member.user.email})</option>
+                        ))}
+                      </select>
+                      <Button type="button" onClick={assignSelectedMember} disabled={!selectedMemberId || changingUserId !== null}>
+                        {changingUserId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                        Assign
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Only organization admins can assign or remove assignees.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {isEditing && (
+            <div className="space-y-3 border-t pt-5">
+              <label className="text-sm font-medium">Comments</label>
+              {commentsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading comments...</div>
+              ) : comments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No comments yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {comments.map((comment) => {
+                    const isAuthor = comment.userId === user?.id;
+                    return (
+                      <div key={comment.id} className="rounded-md border bg-muted/20 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{comment.user.username}</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-sm">{comment.content}</p>
+                          </div>
+                          {isAuthor && (
+                            <div className="flex shrink-0">
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEditingComment(comment)} disabled={commentSaving} aria-label="Edit comment"><Pencil className="h-3.5 w-3.5" /></Button>
+                              <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeComment(comment)} disabled={commentSaving} aria-label="Delete comment"><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Textarea value={commentContent} onChange={(event) => setCommentContent(event.target.value)} disabled={commentSaving} rows={3} placeholder="Write a comment..." className="resize-none" />
+                <div className="flex justify-end gap-2">
+                  {editingCommentId && <Button type="button" variant="outline" onClick={() => { setEditingCommentId(null); setCommentContent(""); }} disabled={commentSaving}>Cancel</Button>}
+                  <Button type="button" onClick={saveComment} disabled={!commentContent.trim() || commentSaving}>
+                    {commentSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {editingCommentId ? "Save comment" : "Add comment"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {error && (

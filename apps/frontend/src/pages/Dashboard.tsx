@@ -186,8 +186,8 @@ const Dashboard = () => {
         {/* Page heading */}
         {/* -------------------------------------------- */}
 
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">
               Dashboard
             </h1>
@@ -199,6 +199,7 @@ const Dashboard = () => {
 
           {selectedOrganization && (
             <Button
+              className="w-full sm:w-auto"
               onClick={() =>
                 setCreateBoardOpen(true)
               }
@@ -251,7 +252,7 @@ const Dashboard = () => {
               /* Organization dropdown */
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" className="w-full justify-start sm:w-auto">
                     <Users className="mr-2 h-4 w-4" />
 
                     {selectedOrganization?.name ??

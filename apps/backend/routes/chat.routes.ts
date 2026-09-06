@@ -1,9 +1,6 @@
 import { Router } from "express";
 
-import {
-  getChatMessages,
-  createChatMessage,
-} from "../controllers/chat.controller.ts";
+import { getChatMessages } from "../controllers/chat.controller.ts";
 
 import {
   authMiddleware,
@@ -15,12 +12,6 @@ router.get(
   "/boards/:boardId/chat-messages",
   authMiddleware,
   getChatMessages
-);
-
-router.post(
-  "/boards/:boardId/chat-messages",
-  authMiddleware,
-  createChatMessage
 );
 
 export default router;

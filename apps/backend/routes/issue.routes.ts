@@ -8,6 +8,7 @@ import {
   updateIssue,
   removeUserFromIssue,
   deleteIssue,
+  getIssueAssignees,
 } from "../controllers/issue.controller";
 
 import { authMiddleware } from "../middleware/auth.middleware";
@@ -18,6 +19,11 @@ router.get(
   "/sections/:sectionId/issues",
   authMiddleware,
   getIssues
+);
+
+router.get("/issues/:issueId/assignees",
+  authMiddleware,
+  getIssueAssignees
 );
 
 router.post(

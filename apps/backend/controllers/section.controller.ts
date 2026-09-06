@@ -9,7 +9,7 @@ export async function createSection(
     const { title } = req.body;
 
     if(!title) {
-        res.status(400).json({ messaage: "Section title is required" })
+        return res.status(400).json({ message: "Section title is required" });
     }
 
     try {
@@ -25,7 +25,7 @@ export async function createSection(
 
         const membership = await prisma.membership.findFirst({
             where: {
-                id: userId,
+                userId: req.userId,
                 organizationId: board.organizationId,
                 role: "ADMIN",
             },
