@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getChatMessages } from "@/services/chat";
 
+const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3002";
+
 export type OnlineUser = {
   id: string;
   username: string;
@@ -133,7 +135,7 @@ const useBoardWebSocket = (boardId?: string) => {
     }
 
     const socket = new WebSocket(
-      `ws://localhost:3002?token=${encodeURIComponent(token)}`
+      `${WS_URL}?token=${encodeURIComponent(token)}`
     );
 
     socketRef.current = socket;

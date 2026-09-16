@@ -6,7 +6,7 @@ const JWT_SECRET =
   process.env.JWT_SECRET || "your_jwt_secret";
 
 const server = new WebSocketServer({
-  port: 3002,
+  port: Number(process.env.PORT) || 3002,
 });
 
 type RoomUser = {

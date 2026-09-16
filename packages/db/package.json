@@ -6,6 +6,10 @@
   "exports": {
     "./client": "./index.ts"
   },
+  "scripts": {
+    "build": "prisma generate",
+    "db:generate": "prisma generate"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.21.0",
