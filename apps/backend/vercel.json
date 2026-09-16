@@ -2,16 +2,15 @@
   "version": 2,
   "bunVersion": "1.x",
   "buildCommand": "cd ../.. && bun install && cd packages/db && bunx prisma generate && cd ../../apps/backend && bun run build",
-  "builds": [
-    {
-      "src": "dist/index.js",
-      "use": "@vercel/node"
+  "functions": {
+    "dist/index.js": {
+      "runtime": "@vercel/node"
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "dist/index.js"
+      "source": "/(.*)",
+      "destination": "/dist/index.js"
     }
   ]
 }
