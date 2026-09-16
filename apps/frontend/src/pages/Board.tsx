@@ -33,8 +33,6 @@ import { getBoardMembers } from "@/services/boards";
 
 import useBoardWebSocket from "@/hooks/useBoardWebSocket";
 
-import type { ChatMessage } from "@/services/chat";
-
 const Board = () => {
   const { boardId } = useParams<{ boardId: string }>();
 
@@ -432,7 +430,7 @@ const Board = () => {
 
           {/* BOARD CHAT */}
           <ChatComponent
-            messages={messages as ChatMessage[]}
+            messages={messages}
             currentUserId={currentUserId}
             onSendMessage={handleSendMessage}
             disabled={!connected}

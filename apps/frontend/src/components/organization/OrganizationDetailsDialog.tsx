@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 
 import { Textarea } from "@/components/ui/textarea";
 
-import type { Organization, OrganizationMembership } from "@/services/organizations";
+import type { OrganizationMembership } from "@/services/organizations";
 
 import {
   updateOrganization,
@@ -32,12 +32,13 @@ import {
 } from "@/services/organizations";
 
 type OrganizationDetailsDialogProps = {
-  organization: Organization | null;
+  organization: OrganizationMembership | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 
   onUpdated?: (organization: OrganizationMembership) => void;
   onDeleted?: (organizationId: string) => void;
+  onError?: (message: string) => void;
 };
 
 const OrganizationDetailsDialog = ({
@@ -46,6 +47,7 @@ const OrganizationDetailsDialog = ({
   onOpenChange,
   onUpdated,
   onDeleted,
+  onError,
 }: OrganizationDetailsDialogProps) => {
   const [editMode, setEditMode] = useState(false);
 
@@ -105,7 +107,7 @@ const OrganizationDetailsDialog = ({
         organization: updatedOrganization,
       };
 
-      onUpdated?.(updatedMembership as Organization);
+      onUpdated?.(updatedMembership);
 
       setEditMode(false);
     } catch (error) {
@@ -114,11 +116,12 @@ const OrganizationDetailsDialog = ({
         error
       );
 
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to update organization."
-      );
+      const message = error instanceof Error
+        ? error.message
+        : "Failed to update organization.";
+
+      setError(message);
+      onError?.(message);
     } finally {
       setSaving(false);
     }

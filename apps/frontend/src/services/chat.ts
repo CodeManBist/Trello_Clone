@@ -2,6 +2,7 @@ import { apiRequest } from "./api";
 
 export type ChatMessage = {
   id: string;
+  type: "chat_message";
   content: string;
   userId: string;
   username: string;
