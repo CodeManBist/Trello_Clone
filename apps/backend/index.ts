@@ -24,14 +24,8 @@ app.use(
 
 app.get("/api/health", (_req, res) => {
     res.json({
-      ok: true,
-      env: {
-        hasDbUrl: !!process.env.DATABASE_URL,
-        hasJwtSecret: !!process.env.JWT_SECRET,
-        hasFrontendUrl: !!process.env.FRONTEND_URL,
-        nodeEnv: process.env.NODE_ENV,
-        frontendUrl: process.env.FRONTEND_URL,
-      },
+        status: "ok",
+        message: "Backend is running",
     });
   });
 
