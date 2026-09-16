@@ -38,13 +38,21 @@ app.use("/api", issueRoutes);
 app.use("/api", commentRoutes);
 app.use("/api", chatRoutes);
 
-const PORT = process.env.PORT || 3001;  
+const PORT = Number(process.env.PORT) || 3001;
 
-if (process.env.NODE_ENV !== "production") {
-    const PORT = Number(process.env.PORT) || 3001;
-    app.listen(PORT, () => {
-      console.log(`Backend running on http://localhost:${PORT}`);
-    });
-  }
-  
-  export default app;
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend running on port ${PORT}`);
+});
+
+server.on("error", (err) => {
+  console.error("SERVER ERROR:", err);
+  process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+});
